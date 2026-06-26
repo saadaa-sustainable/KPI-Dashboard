@@ -4,46 +4,29 @@ import { supabase } from '../lib/supabase'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser]     = useState(null)
-  const [role, setRole]     = useState(null)
+  const [user,    setUser]    = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchRole(session.user.id)
-      else setLoading(false)
+      setLoading(false)
     })
 
-    // Auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null)
-      if (session?.user) fetchRole(session.user.id)
-      else { setRole(null); setLoading(false) }
+      setLoading(false)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  async function fetchRole(userId) {
-    const { data } = await supabase
-      .from('ap_user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .single()
-    setRole(data?.role ?? 'viewer')
-    setLoading(false)
+  async function signInWithEmail(email, password) {
+    return supabase.auth.signInWithPassword({ email, password })
   }
 
-  async function signInWithGoogle() {
-    return supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        hd: 'saadaa.in', // restrict to saadaa.in domain
-        redirectTo: window.location.origin,
-      },
-    })
+  async function signUpWithEmail(email, password) {
+    return supabase.auth.signUp({ email, password })
   }
 
   async function signOut() {
@@ -52,11 +35,11 @@ export function AuthProvider({ children }) {
 
   const value = {
     user,
-    role,
     loading,
-    isUploader: role === 'uploader' || role === 'admin',
-    isAdmin:    role === 'admin',
-    signInWithGoogle,
+    isUploader: true,  // all authenticated users can upload
+    isAdmin:    true,  // all authenticated users are admin
+    signInWithEmail,
+    signUpWithEmail,
     signOut,
   }
 

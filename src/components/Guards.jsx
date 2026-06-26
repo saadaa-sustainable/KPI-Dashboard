@@ -9,16 +9,6 @@ export function RequireAuth({ children }) {
   return children
 }
 
-export function RequireUploader({ children }) {
-  const { isUploader, loading } = useAuth()
-  if (loading)     return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spinner /></div>
-  if (!isUploader) return <Navigate to="/" replace />
-  return children
-}
-
-export function RequireAdmin({ children }) {
-  const { isAdmin, loading } = useAuth()
-  if (loading)   return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><Spinner /></div>
-  if (!isAdmin)  return <Navigate to="/" replace />
-  return children
-}
+// All authenticated users get full access now
+export function RequireUploader({ children }) { return children }
+export function RequireAdmin({ children })    { return children }
