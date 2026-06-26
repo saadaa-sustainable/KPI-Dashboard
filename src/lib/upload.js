@@ -193,9 +193,26 @@ export async function uploadCSV(file, onProgress) {
           }
 
           const cfg = CONFIGS[fileType]
-          const rows = results.data
+          const rawRows = results.data
             .map(cfg.fn)
             .filter(r => r !== null && r.row_hash)
+
+          // Deduplicate within file by conflict key to avoid "ON CONFLICT affect row twice" error
+          const CONFLICT_KEYS = {
+            tat:          r => `${r.invoice_no}|${r.vendor_code}|${r.submitted_at}`,
+            modify:       r => `${r.vch_no}|${r.account}|${r.modified_at}|${r.modified_by}`,
+            add:          r => `${r.vch_no}|${r.account}|${r.entry_date}`,
+            invoice_data: r => `${r.invoice_no}|${r.vendor_code}|${r.submitted_at}`,
+            cost_saved:   r => `${r.month_label}|${r.category}|${r.sub_category}|${r.vendor}`,
+          }
+          const keyFn = CONFLICT_KEYS[fileType]
+          const seen = new Set()
+          const rows = rawRows.filter(r => {
+            const k = keyFn(r)
+            if (seen.has(k)) return false
+            seen.add(k)
+            return true
+          })
 
           const total = rows.length
           let processed = 0
