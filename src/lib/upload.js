@@ -41,24 +41,29 @@ function monthLabel(dateStr) {
   return d.toLocaleString('en-IN', { month: 'short', year: 'numeric' })
 }
 
-// Simple hash for change detection (not cryptographic)
 function rowHash(obj) {
-  return btoa(encodeURIComponent(JSON.stringify(obj))).slice(0, 64)
+  const str = JSON.stringify(obj)
+  let hash = 0
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i)
+    hash |= 0
+  }
+  return String(Math.abs(hash))
 }
 
-// ── File type detection by column fingerprint ──────────────────────────────
+// ── File type detection ────────────────────────────────────────────────────
 
 export function detectFileType(headers) {
   const h = headers.map(x => (x || '').trim().toLowerCase())
-  if (h.includes('timestamp') && h.includes('your association with saadaa')) return 'tat'
+  if (h.some(x => x.includes('your association with saadaa'))) return 'tat'
   if (h.includes('action') && h.some(x => x.includes('org.vch'))) return 'modify'
   if (h.includes('action') && h.includes('name') && !h.some(x => x.includes('org.vch'))) return 'add'
-  if (h.includes('invoice number') && h.includes('po type') && !h.includes('timestamp')) return 'invoice_data'
-  if (h.includes('category') && (h.includes('sub_category') || h.includes('vendor')) && h.includes('saving_amt')) return 'cost_saved'
+  if (h.some(x => x.includes('invoice number')) && h.some(x => x.includes('po type')) && !h.some(x => x.includes('association'))) return 'invoice_data'
+  if (h.some(x => x.includes('saving_amt')) || h.some(x => x.includes('saving amt'))) return 'cost_saved'
   return null
 }
 
-// ── Transformers: raw CSV row → DB row ────────────────────────────────────
+// ── Transformers ───────────────────────────────────────────────────────────
 
 function transformTAT(row) {
   const submittedAt = toDateStr(row['Timestamp'])
@@ -132,9 +137,9 @@ function transformInvoiceData(row) {
     quarter:      quarterLabel(submittedAt),
     invoice_no:   (row['Invoice Number'] || '').trim() || null,
     vendor_code:  (row['Vendor Code'] || '').trim() || null,
-    po_no:        (row['PO No'] || row['PO No.'] || '').trim() || null,
+    po_no:        (row['PO No'] || row['PO No.'] || row['PO No. issued by SAADAA'] || '').trim() || null,
     po_type:      (row['PO Type'] || '').trim() || null,
-    doc_type:     (row['TYPE OF DOCUMENT`'] || row['Document Type'] || '').trim() || null,
+    doc_type:     (row['TYPE OF DOCUMENT`'] || row['Document Type'] || row['TYPE OF DOCUMENT'] || '').trim() || null,
     invoice_date: toDateStr(row['Invoice Date']),
     amount:       toNum(row['Amount'] || row['Invoice Amount']),
     email:        (row['Email address'] || row['Email'] || '').trim() || null,
@@ -159,12 +164,12 @@ function transformCostSaved(row) {
   return { ...base, row_hash: rowHash(base) }
 }
 
-const TRANSFORMERS = {
-  tat:          { fn: transformTAT,         table: 'ap_invoice_tat',    conflictCols: 'invoice_no, vendor_code, submitted_at' },
-  modify:       { fn: transformModify,      table: 'ap_voucher_modify', conflictCols: 'vch_no, account, modified_at, modified_by' },
-  add:          { fn: transformAdd,         table: 'ap_voucher_add',    conflictCols: 'vch_no, account, entry_date' },
-  invoice_data: { fn: transformInvoiceData, table: 'ap_invoice_data',   conflictCols: 'invoice_no, vendor_code, submitted_at' },
-  cost_saved:   { fn: transformCostSaved,   table: 'ap_cost_saved',     conflictCols: null },
+const CONFIGS = {
+  tat:          { fn: transformTAT,         table: 'ap_invoice_tat',    conflict: 'invoice_no, vendor_code, submitted_at' },
+  modify:       { fn: transformModify,      table: 'ap_voucher_modify', conflict: 'vch_no, account, modified_at, modified_by' },
+  add:          { fn: transformAdd,         table: 'ap_voucher_add',    conflict: 'vch_no, account, entry_date' },
+  invoice_data: { fn: transformInvoiceData, table: 'ap_invoice_data',   conflict: 'invoice_no, vendor_code, submitted_at' },
+  cost_saved:   { fn: transformCostSaved,   table: 'ap_cost_saved',     conflict: null },
 }
 
 // ── Main upload function ───────────────────────────────────────────────────
@@ -182,65 +187,68 @@ export async function uploadCSV(file, onProgress) {
           const fileType = detectFileType(headers)
 
           if (!fileType) {
-            return reject(new Error('Unrecognised CSV format. Check you are uploading one of the 5 supported files.'))
+            return reject(new Error(
+              `Could not detect file type.\nHeaders found: ${headers.slice(0,5).join(', ')}\n\nExpected one of: TAT Working, Modify, Add, Invoice Data, Cost Saved CSV.`
+            ))
           }
 
-          const { fn, table } = TRANSFORMERS[fileType]
+          const cfg = CONFIGS[fileType]
           const rows = results.data
-            .map(fn)
-            .filter(r => r !== null)
+            .map(cfg.fn)
+            .filter(r => r !== null && r.row_hash)
 
           const total = rows.length
-          let inserted = 0, updated = 0, skipped = 0
+          let processed = 0
 
           for (let i = 0; i < rows.length; i += BATCH_SIZE) {
             const batch = rows.slice(i, i + BATCH_SIZE)
 
-            const { data, error } = await supabase
-              .from(table)
+            const { error } = await supabase
+              .from(cfg.table)
               .upsert(batch, {
-                onConflict: TRANSFORMERS[fileType].conflictCols,
+                onConflict: cfg.conflict,
                 ignoreDuplicates: false,
               })
-              .select('id')
 
-            if (error) throw error
+            if (error) {
+              console.error('Supabase upsert error:', error)
+              throw new Error(`DB error on batch ${Math.floor(i/BATCH_SIZE)+1}: ${error.message}`)
+            }
 
-            // Estimate counts (Supabase upsert doesn't return granular insert/update/skip counts)
-            // We'll use row_hash comparison approach below
-            inserted += batch.length
-            onProgress?.({ processed: Math.min(i + BATCH_SIZE, total), total, fileType, table })
+            processed += batch.length
+            onProgress?.({ processed, total, fileType, table: cfg.table })
           }
 
-          // Log the upload
-          const { data: { user } } = await supabase.auth.getUser()
-          await supabase.from('ap_upload_log').insert({
-            uploaded_by:   user?.id,
-            email:         user?.email,
-            file_name:     file.name,
-            table_name:    table,
-            rows_inserted: inserted,
-            rows_updated:  updated,
-            rows_skipped:  skipped,
-            status:        'success',
-          })
+          // Log upload
+          try {
+            const { data: { user } } = await supabase.auth.getUser()
+            await supabase.from('ap_upload_log').insert({
+              uploaded_by:   user?.id,
+              email:         user?.email,
+              file_name:     file.name,
+              table_name:    cfg.table,
+              rows_inserted: total,
+              status:        'success',
+            })
+          } catch (_) {}
 
-          resolve({ fileType, table, total, inserted, updated, skipped })
+          resolve({ fileType, table: cfg.table, total })
         } catch (err) {
-          // Log failed upload
-          const { data: { user } } = await supabase.auth.getUser()
-          await supabase.from('ap_upload_log').insert({
-            uploaded_by: user?.id,
-            email:       user?.email,
-            file_name:   file.name,
-            table_name:  'unknown',
-            status:      'error',
-            error_msg:   err.message,
-          }).catch(() => {})
+          try {
+            const { data: { user } } = await supabase.auth.getUser()
+            await supabase.from('ap_upload_log').insert({
+              uploaded_by: user?.id,
+              email:       user?.email,
+              file_name:   file.name,
+              table_name:  'unknown',
+              status:      'error',
+              error_msg:   err.message,
+            })
+          } catch (_) {}
           reject(err)
         }
       },
-      error: (err) => reject(err),
+      error: (err) => reject(new Error('CSV parse error: ' + err.message)),
     })
   })
 }

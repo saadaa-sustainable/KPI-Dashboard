@@ -13,33 +13,28 @@ const FILE_CONFIGS = {
 }
 
 function UploadZone({ fileType, onUpload }) {
-  const [state,    setState]    = useState('idle') // idle | loading | done | error
+  const [state,    setState]    = useState('idle')
   const [progress, setProgress] = useState(0)
-  const [result,   setResult]   = useState(null)
+  const [total,    setTotal]    = useState(0)
+  const [done,     setDone]     = useState(0)
   const [error,    setError]    = useState(null)
   const inputRef = useRef(null)
   const cfg = FILE_CONFIGS[fileType]
 
   async function handleFile(file) {
     if (!file) return
-    // Quick peek at headers to validate
-    const peek = await new Promise(res => Papa.parse(file, { preview: 1, header: true, complete: res }))
-    const detected = detectFileType(peek.meta.fields ?? [])
-    if (detected && detected !== fileType) {
-      setError(`Wrong file — detected as "${FILE_CONFIGS[detected]?.label}". Expected "${cfg.label}".`)
-      setState('error')
-      return
-    }
-
     setState('loading')
     setProgress(0)
     setError(null)
+
     try {
-      const res = await uploadCSV(file, ({ processed, total }) => {
-        setProgress(Math.round(processed / total * 100))
+      const res = await uploadCSV(file, ({ processed, total: t }) => {
+        setTotal(t)
+        setDone(processed)
+        setProgress(Math.round(processed / t * 100))
       })
-      setResult(res)
       setState('done')
+      setTotal(res.total)
       onUpload?.()
     } catch (err) {
       setError(err.message)
@@ -47,13 +42,13 @@ function UploadZone({ fileType, onUpload }) {
     }
   }
 
-  function reset() { setState('idle'); setResult(null); setError(null); setProgress(0) }
+  function reset() { setState('idle'); setError(null); setProgress(0); setTotal(0); setDone(0) }
 
   return (
     <div
       className={`upload-zone ${state === 'done' ? 'done' : state === 'error' ? 'error' : ''}`}
       onDragOver={e => e.preventDefault()}
-      onDrop={e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]) }}
+      onDrop={e => { e.preventDefault(); if (state === 'idle') handleFile(e.dataTransfer.files[0]) }}
       onClick={() => state === 'idle' && inputRef.current?.click()}
       style={{ cursor: state === 'idle' ? 'pointer' : 'default' }}
     >
@@ -70,8 +65,11 @@ function UploadZone({ fileType, onUpload }) {
 
       {state === 'loading' && (
         <>
-          <div className="upload-zone-title" style={{ color: 'var(--accent)' }}>Uploading... {progress}%</div>
-          <div className="upload-progress">
+          <div className="upload-zone-title" style={{ color: 'var(--accent)' }}>
+            Uploading... {progress}%
+          </div>
+          <div className="upload-zone-sub">{done.toLocaleString()} / {total.toLocaleString()} rows</div>
+          <div className="upload-progress" style={{ marginTop: 8 }}>
             <div className="upload-progress-fill" style={{ width: `${progress}%` }} />
           </div>
         </>
@@ -80,7 +78,7 @@ function UploadZone({ fileType, onUpload }) {
       {state === 'done' && (
         <>
           <div className="upload-zone-title">✓ Upload complete</div>
-          <div className="upload-zone-sub">{result?.total.toLocaleString()} rows processed</div>
+          <div className="upload-zone-sub">{total.toLocaleString()} rows processed</div>
           <button className="fbtn" style={{ marginTop: 8 }} onClick={e => { e.stopPropagation(); reset() }}>Upload again</button>
         </>
       )}
@@ -88,7 +86,7 @@ function UploadZone({ fileType, onUpload }) {
       {state === 'error' && (
         <>
           <div className="upload-zone-title">Upload failed</div>
-          <div className="upload-zone-sub" style={{ color: 'var(--red)' }}>{error}</div>
+          <div className="upload-zone-sub" style={{ color: 'var(--red)', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{error}</div>
           <button className="fbtn" style={{ marginTop: 8 }} onClick={e => { e.stopPropagation(); reset() }}>Try again</button>
         </>
       )}
@@ -104,11 +102,12 @@ export default function Upload() {
 
   async function fetchLog() {
     setLoading(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('ap_upload_log')
       .select('*')
       .order('uploaded_at', { ascending: false })
       .limit(50)
+    if (error) console.error('Log fetch error:', error)
     setLog(data ?? [])
     setLoading(false)
   }
@@ -119,8 +118,7 @@ export default function Upload() {
       <div className="page-sub">Upload any of the 5 supported files. Files are auto-detected — duplicates are skipped, changed rows are updated.</div>
 
       <NoteBox>
-        Export each sheet from KPI_Dashboard.xlsx as CSV. You can upload any file independently — partial uploads are safe.
-        Rows with identical data are skipped. If a row changed (e.g. Remark updated), it will be updated in the database.
+        Export each sheet from KPI_Dashboard.xlsx as CSV. Upload one file at a time. Large files (Add Log = 143k rows) take 8-10 mins — keep the tab open.
       </NoteBox>
 
       <div className="upload-grid mb">
@@ -138,22 +136,18 @@ export default function Upload() {
           <div className="table-wrap">
             <table>
               <thead>
-                <tr><th>Time</th><th>File</th><th>Table</th><th>Uploaded By</th><th>Rows</th><th>Status</th></tr>
+                <tr><th>Time</th><th>File</th><th>Table</th><th>By</th><th>Rows</th><th>Status</th><th>Error</th></tr>
               </thead>
               <tbody>
                 {log.map((r, i) => (
                   <tr key={i}>
-                    <td className="mono" style={{ whiteSpace: 'nowrap', fontSize: 10 }}>{new Date(r.uploaded_at).toLocaleString('en-IN')}</td>
-                    <td style={{ fontSize: 10, color: 'var(--muted)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.file_name}</td>
+                    <td className="mono" style={{ fontSize: 10, whiteSpace: 'nowrap' }}>{new Date(r.uploaded_at).toLocaleString('en-IN')}</td>
+                    <td style={{ fontSize: 10, color: 'var(--muted)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.file_name}</td>
                     <td><Tag color="blue">{r.table_name}</Tag></td>
                     <td style={{ fontSize: 11 }}>{r.email}</td>
                     <td className="mono">{(r.rows_inserted || 0).toLocaleString()}</td>
-                    <td>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span className={`status-dot ${r.status === 'success' ? 'dot-green' : 'dot-red'}`} />
-                        <Tag color={r.status === 'success' ? 'green' : 'red'}>{r.status}</Tag>
-                      </span>
-                    </td>
+                    <td><Tag color={r.status === 'success' ? 'green' : 'red'}>{r.status}</Tag></td>
+                    <td style={{ fontSize: 10, color: 'var(--red)', maxWidth: 200 }}>{r.error_msg || ''}</td>
                   </tr>
                 ))}
               </tbody>
