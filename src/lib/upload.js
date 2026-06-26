@@ -169,7 +169,7 @@ const TRANSFORMERS = {
 
 // ── Main upload function ───────────────────────────────────────────────────
 
-const BATCH_SIZE = 500
+const BATCH_SIZE = 2000
 
 export async function uploadCSV(file, onProgress) {
   return new Promise((resolve, reject) => {
