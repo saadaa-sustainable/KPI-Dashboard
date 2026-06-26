@@ -158,11 +158,11 @@ create index if not exists idx_invoice_data_po_type  on ap_invoice_data(po_type)
 -- ============================================================
 create table if not exists ap_cost_saved (
   id              uuid primary key default gen_random_uuid(),
-  month_label     text not null,         -- Oct 2025
-  month_date      date,                  -- 2025-10-01 (for sorting)
-  category        text not null,         -- AP | AR
-  sub_category    text,                  -- DG Goods / Short PCS / Fabric Loss etc.
-  vendor          text,                  -- for AR: Bluedart / Holisol etc.
+  month_label     text not null,
+  month_date      date,
+  category        text not null,
+  sub_category    text,
+  vendor          text,
   invoice_amt     numeric default 0,
   credit_note_amt numeric default 0,
   saving_amt      numeric default 0,
@@ -170,7 +170,9 @@ create table if not exists ap_cost_saved (
   row_hash        text,
   created_at      timestamptz default now(),
   updated_at      timestamptz default now(),
-  unique (month_label, category, coalesce(sub_category,''), coalesce(vendor,''))
+  sub_category_key text generated always as (coalesce(sub_category, '')) stored,
+  vendor_key       text generated always as (coalesce(vendor, '')) stored,
+  unique (month_label, category, sub_category_key, vendor_key)
 );
 
 create index if not exists idx_cost_saved_month    on ap_cost_saved(month_label);
