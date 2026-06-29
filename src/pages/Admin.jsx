@@ -26,27 +26,36 @@ export default function Admin() {
     setSaving(true)
     setMsg(null)
 
-    // Find user by email
-    const { data: authUsers } = await supabase.rpc('get_user_id_by_email', { email_input: email.trim() }).catch(() => ({ data: null }))
-    // Fallback: insert by email only, user_id filled on their next login via trigger
-    const { error } = await supabase.from('ap_user_roles').upsert(
-      { email: email.trim(), role, user_id: authUsers?.[0]?.id ?? null },
-      { onConflict: 'email' }
-    )
+    const { data: existing } = await supabase
+      .from('ap_user_roles')
+      .select('id')
+      .eq('email', email.trim())
+      .maybeSingle()
+
+    let error
+    if (existing) {
+      ;({ error } = await supabase.from('ap_user_roles').update({ role }).eq('id', existing.id))
+    } else {
+      const { data: authUsers } = await supabase.rpc('get_user_id_by_email', { email_input: email.trim() }).catch(() => ({ data: null }))
+      ;({ error } = await supabase.from('ap_user_roles').insert({
+        email: email.trim(), role, user_id: authUsers?.[0]?.id ?? null,
+      }))
+    }
+
     setMsg(error ? { type: 'error', text: error.message } : { type: 'success', text: `Role "${role}" granted to ${email}` })
     setEmail('')
     setSaving(false)
     fetchUsers()
   }
 
-  async function changeRole(userId, newRole) {
-    await supabase.from('ap_user_roles').update({ role: newRole }).eq('user_id', userId)
+  async function changeRole(id, newRole) {
+    await supabase.from('ap_user_roles').update({ role: newRole }).eq('id', id)
     fetchUsers()
   }
 
-  async function removeUser(userId) {
+  async function removeUser(id) {
     if (!confirm('Remove this user\'s access?')) return
-    await supabase.from('ap_user_roles').delete().eq('user_id', userId)
+    await supabase.from('ap_user_roles').delete().eq('id', id)
     fetchUsers()
   }
 
@@ -114,7 +123,7 @@ export default function Admin() {
                     <td>
                       <select
                         value={u.role}
-                        onChange={e => changeRole(u.user_id, e.target.value)}
+                        onChange={e => changeRole(u.id, e.target.value)}
                         style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 4, padding: '4px 8px', color: 'var(--text)', fontSize: 10, outline: 'none', cursor: 'pointer' }}
                       >
                         <option value="viewer">viewer</option>
@@ -123,7 +132,7 @@ export default function Admin() {
                       </select>
                     </td>
                     <td>
-                      <button onClick={() => removeUser(u.user_id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}>
+                      <button onClick={() => removeUser(u.id)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', fontSize: 11 }}>
                         Remove
                       </button>
                     </td>

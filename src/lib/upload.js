@@ -169,7 +169,7 @@ const CONFIGS = {
   modify:       { fn: transformModify,      table: 'ap_voucher_modify', conflict: 'vch_no, account, modified_at, modified_by' },
   add:          { fn: transformAdd,         table: 'ap_voucher_add',    conflict: 'vch_no, account, entry_date' },
   invoice_data: { fn: transformInvoiceData, table: 'ap_invoice_data',   conflict: 'invoice_no, vendor_code, submitted_at' },
-  cost_saved:   { fn: transformCostSaved,   table: 'ap_cost_saved',     conflict: null },
+  cost_saved:   { fn: transformCostSaved,   table: 'ap_cost_saved',     conflict: 'month_label, category, sub_category_key, vendor_key', ignoreDuplicates: true },
 }
 
 // ── Main upload function ───────────────────────────────────────────────────
@@ -224,7 +224,7 @@ export async function uploadCSV(file, onProgress) {
               .from(cfg.table)
               .upsert(batch, {
                 onConflict: cfg.conflict,
-                ignoreDuplicates: false,
+                ignoreDuplicates: cfg.ignoreDuplicates ?? false,
               })
 
             if (error) {

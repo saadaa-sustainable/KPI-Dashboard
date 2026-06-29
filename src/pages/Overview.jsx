@@ -55,7 +55,7 @@ export default function Overview() {
     const byQ = {}
     mod.forEach(r => { byQ[r.quarter]=(byQ[r.quarter]||0)+1 })
     const qtrs = Object.keys(byQ).sort()
-    return { type:'bar', labels:qtrs.map(q=>q.replace(/(\d{4})Q(\d)/,'Q$2 \'$1'.slice(0,6))),
+    return { type:'bar', labels:qtrs.map(q=>q.replace(/(\d{4})Q(\d)/, (_, yr, qn) => `Q${qn} '${yr.slice(-2)}` )),
       datasets:[{ data:qtrs.map(q=>byQ[q]), backgroundColor:qtrs.map(q=>q===qtr?'rgba(91,141,238,0.5)':'rgba(91,141,238,0.2)'), borderColor:'#5b8dee', borderWidth:1, borderRadius:6 }] }
   })() : null, [mod.length, qtr])
 

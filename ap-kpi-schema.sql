@@ -264,7 +264,8 @@ create table if not exists ap_user_roles (
   email      text not null,
   role       text not null default 'viewer', -- viewer | uploader | admin
   created_at timestamptz default now(),
-  unique(user_id)
+  unique(user_id),
+  unique(email)
 );
 
 alter table ap_user_roles enable row level security;
@@ -276,6 +277,12 @@ returns text language sql security definer stable as $$
     (select role from ap_user_roles where user_id = auth.uid()),
     'viewer'
   );
+$$;
+
+-- Helper function: look up a user's auth.users id by email (admin-only use)
+create or replace function get_user_id_by_email(email_input text)
+returns table(id uuid) language sql security definer stable as $$
+  select id from auth.users where email = email_input limit 1;
 $$;
 
 -- Helper function: is @saadaa.in email
@@ -347,3 +354,12 @@ create policy "admin can manage roles" on ap_user_roles
 -- from auth.users
 -- where email = 'your.email@saadaa.in'
 -- on conflict (user_id) do update set role = 'admin';
+
+-- ============================================================
+-- MIGRATION: run on existing databases to add missing constraints
+-- ============================================================
+-- alter table ap_user_roles add constraint ap_user_roles_email_unique unique (email);
+-- create or replace function get_user_id_by_email(email_input text)
+-- returns table(id uuid) language sql security definer stable as $$
+--   select id from auth.users where email = email_input limit 1;
+-- $$;

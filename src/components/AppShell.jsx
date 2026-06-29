@@ -55,7 +55,7 @@ export default function AppShell() {
                 <button className={`qtr-btn ${qtr === 'all' ? 'active' : ''}`} onClick={() => setQtr('all')}>All</button>
                 {quarters.map(q => (
                   <button key={q} className={`qtr-btn ${qtr === q ? 'active' : ''}`} onClick={() => setQtr(q)}>
-                    {q.replace(/(\d{4})Q(\d)/, 'Q$2\'$1'.slice(-3))}
+                    {q.replace(/(\d{4})Q(\d)/, (_, yr, qn) => `Q${qn}'${yr.slice(-2)}`)}
                   </button>
                 ))}
               </div>
