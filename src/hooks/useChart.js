@@ -1,16 +1,16 @@
 import { useEffect, useRef } from 'react'
 import Chart from 'chart.js/auto'
 
-Chart.defaults.color = '#6b7594'
+Chart.defaults.color = '#8891ae'
 Chart.defaults.font.family = 'Inter'
 Chart.defaults.font.size = 11
 
-const GRID = { color: 'rgba(37,45,66,0.8)', drawBorder: false }
+const GRID = { color: 'rgba(226,229,240,0.9)', drawBorder: false }
 const TT   = {
-  backgroundColor: '#1e2435',
-  titleColor: '#e8eaf0',
-  bodyColor: '#a0a9c0',
-  borderColor: '#252d42',
+  backgroundColor: '#ffffff',
+  titleColor: '#111827',
+  bodyColor: '#4a5278',
+  borderColor: '#e2e5f0',
   borderWidth: 1,
   padding: 10,
   cornerRadius: 6,

@@ -1,33 +1,33 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
 :root {
-  --bg:         #08090d;
-  --surface:    #0f1117;
-  --surface2:   #151820;
-  --surface3:   #1a1e2e;
-  --border:     #1f2537;
-  --border2:    #2a3248;
-  --text:       #e2e4ed;
-  --text2:      #9ba3be;
-  --muted:      #5a6380;
-  --accent:     #5b8dee;
-  --accent2:    #7aa3f5;
-  --accent-dim: rgba(91,141,238,0.1);
-  --accent-glow:rgba(91,141,238,0.2);
-  --red:        #f0545e;
-  --red-dim:    rgba(240,84,94,0.1);
-  --green:      #36c87a;
-  --green-dim:  rgba(54,200,122,0.1);
-  --amber:      #f5a623;
-  --amber-dim:  rgba(245,166,35,0.1);
-  --purple:     #9f7aea;
-  --purple-dim: rgba(159,122,234,0.1);
-  --teal:       #38bdf8;
-  --teal-dim:   rgba(56,189,248,0.1);
+  --bg:         #f4f6fb;
+  --surface:    #ffffff;
+  --surface2:   #f0f2f8;
+  --surface3:   #e8eaf3;
+  --border:     #e2e5f0;
+  --border2:    #ced3e8;
+  --text:       #111827;
+  --text2:      #4a5278;
+  --muted:      #8891ae;
+  --accent:     #4b7cf3;
+  --accent2:    #3d6de0;
+  --accent-dim: rgba(75,124,243,0.1);
+  --accent-glow:rgba(75,124,243,0.2);
+  --red:        #dc2626;
+  --red-dim:    rgba(220,38,38,0.08);
+  --green:      #16a34a;
+  --green-dim:  rgba(22,163,74,0.08);
+  --amber:      #b45309;
+  --amber-dim:  rgba(180,83,9,0.08);
+  --purple:     #7c3aed;
+  --purple-dim: rgba(124,58,237,0.08);
+  --teal:       #0891b2;
+  --teal-dim:   rgba(8,145,178,0.08);
   --r:          10px;
   --r-sm:       6px;
-  --shadow:     0 4px 24px rgba(0,0,0,0.4);
-  --shadow-sm:  0 2px 8px rgba(0,0,0,0.3);
+  --shadow:     0 4px 24px rgba(0,0,0,0.08);
+  --shadow-sm:  0 2px 8px rgba(0,0,0,0.05);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -222,7 +222,7 @@ thead th {
 }
 thead th:first-child { border-radius: var(--r-sm) 0 0 0; }
 thead th:last-child  { border-radius: 0 var(--r-sm) 0 0; }
-tbody tr { border-bottom: 1px solid rgba(31,37,55,0.8); transition: background 0.1s; }
+tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
 tbody tr:hover { background: var(--surface2); }
 tbody td { padding: 9px 12px; color: var(--text); }
 tbody tr:last-child td { border-bottom: none; }
@@ -317,8 +317,8 @@ input::placeholder { color: var(--muted); }
 .login-page {
   display: flex; align-items: center; justify-content: center;
   min-height: 100vh; background: var(--bg);
-  background-image: radial-gradient(ellipse at 20% 50%, rgba(91,141,238,0.05) 0%, transparent 60%),
-                    radial-gradient(ellipse at 80% 20%, rgba(159,122,234,0.04) 0%, transparent 50%);
+  background-image: radial-gradient(ellipse at 20% 50%, rgba(75,124,243,0.08) 0%, transparent 60%),
+                    radial-gradient(ellipse at 80% 20%, rgba(124,58,237,0.06) 0%, transparent 50%);
 }
 .login-card {
   background: var(--surface); border: 1px solid var(--border);
