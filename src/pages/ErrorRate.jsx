@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { Card, InfoBox, NoteBox, ProgressBar, Tag, Spinner, EmptyState, HelpButton } from '../components/UI'
-import { buildVoucherSummary, qtrText, rateColor, rowFiscalQuarter } from '../lib/insights'
+import { buildVoucherSummary, quarterMatchesSelection, qtrText, rateColor, rowFiscalQuarter, rowMatchesSelection } from '../lib/insights'
 
 const HELP = {
   title: 'Error Rate',
@@ -27,15 +27,15 @@ const HELP = {
 }
 
 export default function ErrorRate() {
-  const { qtr, data, dataLoading, dataError } = useQtr()
+  const { selectedYears, selectedQuarters, filterLabel, data, dataLoading, dataError } = useQtr()
   const addData = data.add
   const modData = data.mod
   const refRate = useRef(null)
   const refSeries = useRef(null)
 
   const voucherSummary = useMemo(() => buildVoucherSummary(addData, modData), [addData, modData])
-  const summaryRows = qtr === 'all' ? voucherSummary.rows : voucherSummary.rows.filter(r => r.quarter === qtr)
-  const filteredMod = qtr === 'all' ? voucherSummary.modifyUnique : voucherSummary.modifyUnique.filter(r => r.quarter === qtr)
+  const summaryRows = voucherSummary.rows.filter(r => rowMatchesSelection(r, selectedYears, selectedQuarters))
+  const filteredMod = voucherSummary.modifyUnique.filter(r => rowMatchesSelection(r, selectedYears, selectedQuarters))
 
   const byPerson = {}
   summaryRows.forEach(r => {
@@ -59,7 +59,7 @@ export default function ErrorRate() {
   const topSeries = Object.entries(bySeries).sort((a, b) => b[1] - a[1]).slice(0, 10)
 
   const quarters = [...new Set([...addData, ...modData].map(rowFiscalQuarter).filter(Boolean))].sort()
-  const displayQtrs = qtr === 'all' ? quarters : [qtr]
+  const displayQtrs = quarters.filter(q => quarterMatchesSelection(q, selectedYears, selectedQuarters))
   const tableRows = []
   displayQtrs.forEach(q => {
     const qRows = voucherSummary.rows.filter(r => r.quarter === q)
@@ -88,13 +88,13 @@ export default function ErrorRate() {
       borderRadius: 6,
     }],
     options: { pct: true, legend: true }
-  } : null, [summaryRows.length, filteredMod.length, qtr])
+  } : null, [summaryRows.length, filteredMod.length, filterLabel])
 
   useChart(refSeries, topSeries.length > 0 ? {
     type: 'bar',
     labels: topSeries.map(s => s[0]),
     datasets: [{ data: topSeries.map(s => s[1]), backgroundColor: 'rgba(159,122,234,0.2)', borderColor: '#9f7aea', borderWidth: 1, borderRadius: 6 }]
-  } : null, [filteredMod.length, qtr])
+  } : null, [filteredMod.length, filterLabel])
 
   if (dataLoading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
   if (dataError) return <EmptyState icon="!" title="Could not load voucher data" sub={dataError.message} />
@@ -103,7 +103,7 @@ export default function ErrorRate() {
   const totalAdded = summaryRows.length
   const totalModified = summaryRows.filter(r => r.is_modified).length
   const totalRate = totalAdded > 0 ? (totalModified / totalAdded * 100).toFixed(1) : '0.0'
-  const qtrLabel = qtrText(qtr)
+  const qtrLabel = filterLabel
 
   return (
     <>

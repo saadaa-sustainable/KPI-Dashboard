@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { KpiCard, Card, Tag, Spinner, EmptyState, InfoBox, HelpButton } from '../components/UI'
-import { buildInvoiceTatRows, monthSort, qtrText, rateColor, TAT_DELAY_DAYS } from '../lib/insights'
+import { buildInvoiceTatRows, monthSort, rateColor, rowMatchesSelection, TAT_DELAY_DAYS } from '../lib/insights'
 
 const HELP = {
   title: 'Invoice TAT',
@@ -35,7 +35,7 @@ function avg(values) {
 }
 
 export default function DelayedEntry() {
-  const { qtr, data, dataLoading, dataError } = useQtr()
+  const { selectedYears, selectedQuarters, filterLabel, data, dataLoading, dataError } = useQtr()
   const invoiceRows = data.inv
   const addRows = data.add
   const modifyRows = data.mod
@@ -46,7 +46,7 @@ export default function DelayedEntry() {
   const refRemark = useRef(null)
 
   const enriched = useMemo(() => buildInvoiceTatRows(invoiceRows, addRows, modifyRows), [invoiceRows, addRows, modifyRows])
-  const filtered = qtr === 'all' ? enriched : enriched.filter(r => r.quarter === qtr)
+  const filtered = enriched.filter(r => rowMatchesSelection(r, selectedYears, selectedQuarters))
   const withTat = filtered.filter(r => r.remark)
 
   const byPerson = {}
@@ -91,7 +91,7 @@ export default function DelayedEntry() {
       { label: 'Delay', data: personNames.map(n => byPerson[n].delay), backgroundColor: 'rgba(240,84,94,0.2)', borderColor: '#f0545e', borderWidth: 1, borderRadius: 6 },
     ],
     options: { legend: true, stacked: true }
-  } : null, [withTat.length, qtr])
+  } : null, [withTat.length, filterLabel])
 
   useChart(refMonthly, months.length > 0 ? {
     type: 'line',
@@ -106,7 +106,7 @@ export default function DelayedEntry() {
       pointRadius: 4,
     }],
     options: { pct: true, legend: true }
-  } : null, [withTat.length, qtr])
+  } : null, [withTat.length, filterLabel])
 
   useChart(refPO, poLabels.length > 0 ? {
     type: 'bar',
@@ -116,20 +116,18 @@ export default function DelayedEntry() {
       { label: 'Delay', data: poLabels.map(k => byPO[k].delay), backgroundColor: 'rgba(240,84,94,0.2)', borderColor: '#f0545e', borderWidth: 1, borderRadius: 6 },
     ],
     options: { legend: true, stacked: true }
-  } : null, [withTat.length, qtr])
+  } : null, [withTat.length, filterLabel])
 
   useChart(refRemark, withTat.length > 0 ? {
     type: 'doughnut',
     labels: ['On Time', 'Delay'],
     datasets: [{ data: [ontime, delayed], backgroundColor: ['rgba(54,200,122,0.2)', 'rgba(240,84,94,0.2)'], borderColor: ['#36c87a', '#f0545e'], borderWidth: 2 }],
     options: { legend: true, extra: { cutout: '68%' } }
-  } : null, [withTat.length, qtr])
+  } : null, [withTat.length, filterLabel])
 
   if (dataLoading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
   if (dataError) return <EmptyState icon="!" title="Could not load invoice TAT data" sub={dataError.message} />
   if (!invoiceRows.length) return <EmptyState icon="[]" title="No invoice data" sub="Upload Invoice Data, Add, and Modify CSVs to recreate the OG TAT insights." />
-
-  const qtrLabel = qtrText(qtr)
 
   return (
     <>
@@ -138,7 +136,7 @@ export default function DelayedEntry() {
           <div className="page-title">Invoice TAT</div>
           <HelpButton {...HELP} />
         </div>
-        <div className="page-sub">Recreated from Invoice Data + Add + Modify CSVs - {qtrLabel}</div>
+        <div className="page-sub">Recreated from Invoice Data + Add + Modify CSVs - {filterLabel}</div>
       </div>
 
       <InfoBox>OG rule matched: TAT = Add In Busy date - invoice timestamp; Delay when TAT is greater than {TAT_DELAY_DAYS} days.</InfoBox>

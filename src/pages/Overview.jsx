@@ -2,7 +2,7 @@ import { useMemo, useRef } from 'react'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { KpiCard, Card, EmptyState, Spinner, HelpButton, Tag } from '../components/UI'
-import { buildInvoiceTatRows, buildVoucherSummary, monthSort, qtrText, rateColor, rowFiscalQuarter } from '../lib/insights'
+import { buildInvoiceTatRows, buildVoucherSummary, monthSort, rateColor, rowMatchesSelection } from '../lib/insights'
 
 const HELP = {
   title: 'Overview',
@@ -27,7 +27,7 @@ function avg(values) {
 }
 
 export default function Overview() {
-  const { qtr, data, dataLoading, dataError } = useQtr()
+  const { selectedYears, selectedQuarters, filterLabel, data, dataLoading, dataError } = useQtr()
   const add = data.add
   const mod = data.mod
   const inv = data.inv
@@ -38,12 +38,12 @@ export default function Overview() {
   const refPerson = useRef(null)
 
   const voucherSummary = useMemo(() => buildVoucherSummary(add, mod), [add, mod])
-  const summaryRows = qtr === 'all' ? voucherSummary.rows : voucherSummary.rows.filter(r => r.quarter === qtr)
+  const summaryRows = voucherSummary.rows.filter(r => rowMatchesSelection(r, selectedYears, selectedQuarters))
   const filtAdd = summaryRows
   const filtMod = summaryRows.filter(r => r.is_modified)
-  const filtInv = qtr === 'all' ? inv : inv.filter(r => rowFiscalQuarter(r) === qtr)
+  const filtInv = inv.filter(r => rowMatchesSelection(r, selectedYears, selectedQuarters))
   const tatRows = useMemo(() => buildInvoiceTatRows(inv, add, mod), [inv, add, mod])
-  const filtTat = qtr === 'all' ? tatRows : tatRows.filter(r => r.quarter === qtr)
+  const filtTat = tatRows.filter(r => rowMatchesSelection(r, selectedYears, selectedQuarters))
   const matchedTat = filtTat.filter(r => r.remark)
   const delayed = matchedTat.filter(r => r.remark === 'Delay').length
   const delayRate = matchedTat.length ? (delayed / matchedTat.length * 100).toFixed(2) : '0.00'
@@ -82,7 +82,7 @@ export default function Overview() {
       ],
       options: { legend: true }
     }
-  })() : null, [filtAdd.length, filtMod.length, qtr])
+  })() : null, [filtAdd.length, filtMod.length, filterLabel])
 
   useChart(refInvoiceMonth, filtInv.length ? (() => {
     const byM = {}
@@ -94,7 +94,7 @@ export default function Overview() {
       datasets: [{ label: 'Invoices', data: months.map(m => byM[m]), borderColor: '#4b7cf3', backgroundColor: 'rgba(75,124,243,0.08)', fill: true, tension: 0.35, pointRadius: 4 }],
       options: { legend: true }
     }
-  })() : null, [filtInv.length, qtr])
+  })() : null, [filtInv.length, filterLabel])
 
   useChart(refPO, filtInv.length ? (() => {
     const byPO = {}
@@ -104,7 +104,7 @@ export default function Overview() {
     })
     const labels = Object.keys(byPO).sort((a, b) => byPO[b] - byPO[a]).slice(0, 8)
     return { type: 'bar', labels, datasets: [{ data: labels.map(l => byPO[l]), backgroundColor: 'rgba(20,184,166,0.18)', borderColor: '#0f9888', borderWidth: 1, borderRadius: 6 }] }
-  })() : null, [filtInv.length, qtr])
+  })() : null, [filtInv.length, filterLabel])
 
   useChart(refPerson, personRows.length ? (() => {
     const names = personRows.map(r => r.person)
@@ -118,7 +118,7 @@ export default function Overview() {
       ],
       options: { legend: true }
     }
-  })() : null, [personRows.length, filtAdd.length, matchedTat.length, qtr])
+  })() : null, [personRows.length, filtAdd.length, matchedTat.length, filterLabel])
 
   if (dataLoading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
   if (dataError) return <EmptyState icon="!" title="Could not load dashboard data" sub={dataError.message} />
@@ -131,7 +131,7 @@ export default function Overview() {
           <div className="page-title">Overview</div>
           <HelpButton {...HELP} />
         </div>
-        <div className="page-sub">AP activity from Add, Modify, and Invoice Data CSVs - {qtrText(qtr)}</div>
+        <div className="page-sub">AP activity from Add, Modify, and Invoice Data CSVs - {filterLabel}</div>
       </div>
 
       <div className="kpi-row mb">

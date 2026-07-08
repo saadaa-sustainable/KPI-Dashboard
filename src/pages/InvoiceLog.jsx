@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQtr } from '../components/AppShell'
 import { Card, Tag, Spinner, EmptyState, StatusTag, HelpButton } from '../components/UI'
-import { buildInvoiceTatRows, qtrText, rowFiscalQuarter } from '../lib/insights'
+import { buildInvoiceTatRows, rowMatchesSelection } from '../lib/insights'
 
 const PAGE = 100
 const shortPO = s => (s || '')
@@ -34,21 +34,21 @@ const HELP = {
 }
 
 export default function InvoiceLog() {
-  const { qtr, data, dataLoading, dataError } = useQtr()
+  const { selectedYears, selectedQuarters, filterLabel, data, dataLoading, dataError } = useQtr()
   const [page, setPage] = useState(0)
   const [docType, setDocType] = useState('all')
   const [search, setSearch] = useState('')
 
-  useEffect(() => { setPage(0) }, [qtr, docType, search])
+  useEffect(() => { setPage(0) }, [selectedYears, selectedQuarters, docType, search])
 
   const filteredRows = useMemo(() => {
     const term = search.trim().toLowerCase()
     return data.inv
-      .filter(r => qtr === 'all' || rowFiscalQuarter(r) === qtr)
+      .filter(r => rowMatchesSelection(r, selectedYears, selectedQuarters))
       .filter(r => docType === 'all' || r.doc_type === docType)
       .filter(r => !term || [r.invoice_no, r.vendor_code, r.po_no, r.email].some(v => String(v || '').toLowerCase().includes(term)))
       .sort((a, b) => new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0))
-  }, [data.inv, qtr, docType, search])
+  }, [data.inv, selectedYears, selectedQuarters, docType, search])
 
   const docOptions = [
     { value: 'all', label: 'All' },
@@ -59,7 +59,6 @@ export default function InvoiceLog() {
   const total = filteredRows.length
   const rows = useMemo(() => filteredRows.slice(page * PAGE, page * PAGE + PAGE), [filteredRows, page])
   const totalPages = Math.ceil(total / PAGE)
-  const qtrLabel = qtrText(qtr)
   const displayRows = useMemo(() => buildInvoiceTatRows(rows, data.add, data.mod), [rows, data.add, data.mod])
 
   return (
@@ -69,7 +68,7 @@ export default function InvoiceLog() {
           <div className="page-title">Invoice Log</div>
           <HelpButton {...HELP} />
         </div>
-        <div className="page-sub">{total.toLocaleString()} records - {qtrLabel}</div>
+        <div className="page-sub">{total.toLocaleString()} records - {filterLabel}</div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>

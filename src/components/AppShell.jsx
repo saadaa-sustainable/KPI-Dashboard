@@ -3,14 +3,15 @@ import { useAuth } from '../hooks/useAuth'
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllRows } from '../lib/db'
-import { qtrText, rowFiscalQuarter } from '../lib/insights'
+import { fiscalYearText, quarterParts, rowFiscalQuarter, selectionText } from '../lib/insights'
 
 // ── Quarter context — shared across all pages ──────────────────────────────
 const EMPTY_DATA = { add: [], mod: [], inv: [] }
 
 export const QtrContext = createContext({
-  qtr: 'all',
-  setQtr: () => {},
+  selectedYears: [],
+  selectedQuarters: [],
+  filterLabel: 'All Years - All Quarters',
   data: EMPTY_DATA,
   dataLoading: true,
   dataError: null,
@@ -30,11 +31,24 @@ const NAV = [
 export default function AppShell() {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
-  const [qtr,      setQtr]     = useState('all')
   const [quarters, setQuarters] = useState([])
+  const [selectedYears, setSelectedYears] = useState([])
+  const [selectedQuarters, setSelectedQuarters] = useState([])
   const [data, setData] = useState(EMPTY_DATA)
   const [dataLoading, setDataLoading] = useState(true)
   const [dataError, setDataError] = useState(null)
+
+  const fiscalYears = [...new Set(quarters.map(q => quarterParts(q)?.fyEnd).filter(Boolean))].sort()
+  const quarterNums = ['1', '2', '3', '4']
+  const filterLabel = selectionText(selectedYears, selectedQuarters)
+
+  function toggleYear(year) {
+    setSelectedYears(prev => prev.includes(year) ? prev.filter(y => y !== year) : [...prev, year].sort())
+  }
+
+  function toggleQuarter(quarter) {
+    setSelectedQuarters(prev => prev.includes(quarter) ? prev.filter(q => q !== quarter) : [...prev, quarter].sort())
+  }
 
   async function loadPrimaryData() {
     setDataLoading(true)
@@ -50,7 +64,9 @@ export default function AppShell() {
       const all = [...add, ...mod, ...inv].map(rowFiscalQuarter).filter(Boolean)
       const unique = [...new Set(all)].sort()
       setQuarters(unique)
-      if (qtr !== 'all' && !unique.includes(qtr)) setQtr('all')
+      const availableYears = [...new Set(unique.map(q => quarterParts(q)?.fyEnd).filter(Boolean))]
+      setSelectedYears(prev => prev.filter(y => availableYears.includes(y)))
+      setSelectedQuarters(prev => prev.filter(q => quarterNums.includes(q)))
     } catch (error) {
       console.error('Primary data load error:', error)
       setDataError(error)
@@ -71,7 +87,7 @@ export default function AppShell() {
   }
 
   return (
-    <QtrContext.Provider value={{ qtr, setQtr, data, dataLoading, dataError, refreshData: loadPrimaryData }}>
+    <QtrContext.Provider value={{ selectedYears, selectedQuarters, filterLabel, data, dataLoading, dataError, refreshData: loadPrimaryData }}>
       <div className="app-shell">
         <header className="header">
           <div className="header-brand">
@@ -81,13 +97,29 @@ export default function AppShell() {
           </div>
           <div className="header-right">
             {quarters.length > 0 && (
-              <div className="qtr-selector">
-                <button className={`qtr-btn ${qtr === 'all' ? 'active' : ''}`} onClick={() => setQtr('all')}>All</button>
-                {quarters.map(q => (
-                  <button key={q} className={`qtr-btn ${qtr === q ? 'active' : ''}`} onClick={() => setQtr(q)}>
-                    {qtrText(q)}
-                  </button>
-                ))}
+              <div className="filter-controls">
+                <div className="filter-group">
+                  <span className="filter-chip-label">FY</span>
+                  <div className="qtr-selector">
+                    <button className={`qtr-btn ${selectedYears.length === 0 ? 'active' : ''}`} onClick={() => setSelectedYears([])}>All Years</button>
+                    {fiscalYears.map(year => (
+                      <button key={year} className={`qtr-btn ${selectedYears.includes(year) ? 'active' : ''}`} onClick={() => toggleYear(year)}>
+                        {fiscalYearText(year)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="filter-group">
+                  <span className="filter-chip-label">Quarter</span>
+                  <div className="qtr-selector">
+                    <button className={`qtr-btn ${selectedQuarters.length === 0 ? 'active' : ''}`} onClick={() => setSelectedQuarters([])}>All Qtrs</button>
+                    {quarterNums.map(quarter => (
+                      <button key={quarter} className={`qtr-btn ${selectedQuarters.includes(quarter) ? 'active' : ''}`} onClick={() => toggleQuarter(quarter)}>
+                        Q{quarter}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
             <span className="header-user">{user?.email}</span>

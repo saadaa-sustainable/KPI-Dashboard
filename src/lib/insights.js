@@ -40,11 +40,43 @@ export function monthSort(a, b) {
 
 export function qtrText(qtr) {
   if (qtr === 'all') return 'All Quarters'
-  const match = String(qtr).match(/^(\d{4})Q([1-4])$/)
-  if (!match) return String(qtr)
-  const fyEnd = Number(match[1])
-  const q = match[2]
-  return `FY${String(fyEnd - 1).slice(-2)}-${String(fyEnd).slice(-2)} Q${q}`
+  const parts = quarterParts(qtr)
+  if (!parts) return String(qtr)
+  return `${fiscalYearText(parts.fyEnd)} Q${parts.quarter}`
+}
+
+export function quarterParts(qtr) {
+  const match = String(qtr || '').match(/^(\d{4})Q([1-4])$/)
+  if (!match) return null
+  return { fyEnd: match[1], quarter: match[2] }
+}
+
+export function fiscalYearText(fyEnd) {
+  const endYear = Number(fyEnd)
+  if (!endYear) return String(fyEnd)
+  return `FY${String(endYear - 1).slice(-2)}-${String(endYear).slice(-2)}`
+}
+
+export function quarterMatchesSelection(qtr, selectedYears = [], selectedQuarters = []) {
+  const parts = quarterParts(qtr)
+  if (!parts) return false
+  const yearOk = selectedYears.length === 0 || selectedYears.includes(parts.fyEnd)
+  const quarterOk = selectedQuarters.length === 0 || selectedQuarters.includes(parts.quarter)
+  return yearOk && quarterOk
+}
+
+export function rowMatchesSelection(row, selectedYears = [], selectedQuarters = []) {
+  return quarterMatchesSelection(rowFiscalQuarter(row), selectedYears, selectedQuarters)
+}
+
+export function selectionText(selectedYears = [], selectedQuarters = []) {
+  const years = selectedYears.length
+    ? selectedYears.map(fiscalYearText).join(', ')
+    : 'All Years'
+  const quarters = selectedQuarters.length
+    ? selectedQuarters.map(q => `Q${q}`).join(', ')
+    : 'All Quarters'
+  return `${years} - ${quarters}`
 }
 
 export function fiscalQuarterLabel(value) {

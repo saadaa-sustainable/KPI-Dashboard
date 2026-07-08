@@ -4,7 +4,7 @@ import { fetchAllRows } from '../lib/db'
 import { useChart } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { KpiCard, Card, NoteBox, Tag, Spinner, EmptyState, HelpButton } from '../components/UI'
-import { qtrText, rowFiscalQuarter } from '../lib/insights'
+import { rowMatchesSelection } from '../lib/insights'
 
 const fmt = n => n!=null ? `₹${Number(n).toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'
 const pct  = n => n!=null ? `${Number(n).toFixed(2)}%` : '—'
@@ -32,7 +32,7 @@ const HELP = {
 }
 
 export default function CostSavings() {
-  const { qtr } = useQtr()
+  const { selectedYears, selectedQuarters, filterLabel } = useQtr()
   const [rows, setRows] = useState([])
   const [cat,  setCat]  = useState('all')
   const [loading, setLoading] = useState(true)
@@ -48,7 +48,7 @@ export default function CostSavings() {
     setLoading(false)
   }
 
-  const qtrRows = qtr === 'all' ? rows : rows.filter(r => rowFiscalQuarter(r) === qtr)
+  const qtrRows = rows.filter(r => rowMatchesSelection(r, selectedYears, selectedQuarters))
   const filtered = qtrRows.filter(r => cat === 'all' || r.category === cat)
 
   const totalInvoice = filtered.reduce((a,r)=>a+(r.invoice_amt||0),0)
@@ -83,7 +83,7 @@ export default function CostSavings() {
       { label:'Invoice', data:subKeys.map(k=>bySub[k].invoice), backgroundColor:'rgba(91,141,238,0.2)', borderColor:'#5b8dee', borderWidth:1, borderRadius:6 },
       { label:'Saving',  data:subKeys.map(k=>bySub[k].saving),  backgroundColor:'rgba(54,200,122,0.2)', borderColor:'#36c87a', borderWidth:1, borderRadius:6 },
     ], options:{legend:true}
-  } : null, [filtered.length, cat, qtr])
+  } : null, [filtered.length, cat, filterLabel])
 
   useChart(refTrend, months.length > 0 ? {
     type:'line', labels:months,
@@ -91,7 +91,7 @@ export default function CostSavings() {
       { label:'AP Saving %', data:months.map(m=>{const d=byMonthCat[m]?.AP; return d&&d.invoice>0?(d.saving/d.invoice*100).toFixed(2):0}), borderColor:'#5b8dee', backgroundColor:'rgba(91,141,238,0.06)', fill:true, tension:0.4, pointRadius:4 },
       { label:'AR Saving %', data:months.map(m=>{const d=byMonthCat[m]?.AR; return d&&d.invoice>0?(d.saving/d.invoice*100).toFixed(2):0}), borderColor:'#36c87a', backgroundColor:'rgba(54,200,122,0.06)', fill:true, tension:0.4, pointRadius:4 },
     ], options:{legend:true, pct:true}
-  } : null, [qtrRows.length, qtr])
+  } : null, [qtrRows.length, filterLabel])
 
   if (loading) return <div style={{padding:60,textAlign:'center'}}><Spinner /></div>
   if (!rows.length) return <EmptyState icon="₹" title="No cost savings data" sub="Upload the Cost Saved Achieved CSV." />
@@ -105,7 +105,7 @@ export default function CostSavings() {
           <div className="page-title">Cost Savings</div>
           <HelpButton {...HELP} />
         </div>
-        <div className="page-sub">AP debit note recoveries and AR logistics deductions - {qtrText(qtr)}</div>
+        <div className="page-sub">AP debit note recoveries and AR logistics deductions - {filterLabel}</div>
       </div>
 
       <div className="kpi-row mb">

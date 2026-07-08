@@ -63,7 +63,7 @@ html, body, #root {
   z-index: 100;
   backdrop-filter: blur(12px);
 }
-.header-brand  { display: flex; align-items: center; gap: 10px; }
+.header-brand  { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 .header-logo   {
   font-size: 10px; font-weight: 700; letter-spacing: 0.12em;
   text-transform: uppercase; color: var(--accent);
@@ -72,15 +72,24 @@ html, body, #root {
 }
 .header-sep    { color: var(--border2); font-size: 18px; }
 .header-title  { font-size: 13px; font-weight: 600; color: var(--text); }
-.header-right  { display: flex; align-items: center; gap: 10px; }
-.header-user   { font-size: 11px; color: var(--muted); }
+.header-right  { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.header-user   { font-size: 11px; color: var(--muted); flex: 0 0 auto; }
 
 /* ── Quarter selector in header ── */
+.filter-controls {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+  max-width: min(1040px, 64vw);
+}
+.filter-group { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.filter-chip-label {
+  font-size: 9px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.08em; flex: 0 0 auto;
+}
 .qtr-selector  {
   display: flex; align-items: center; gap: 1px;
   background: var(--surface2); border: 1px solid var(--border);
   border-radius: var(--r-sm); padding: 2px; overflow-x: auto; overflow-y: hidden;
-  max-width: min(760px, 55vw);
+  max-width: 100%;
 }
 .qtr-btn {
   padding: 4px 10px; font-size: 10px; font-weight: 600;
