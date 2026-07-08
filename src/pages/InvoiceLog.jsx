@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useQtr } from '../components/AppShell'
 import { Card, Tag, Spinner, EmptyState, StatusTag, HelpButton } from '../components/UI'
-import { buildInvoiceTatRows } from '../lib/insights'
+import { buildInvoiceTatRows, rowFiscalQuarter } from '../lib/insights'
 
 const PAGE = 100
 const shortPO = s => (s || '')
@@ -59,15 +59,16 @@ export default function InvoiceLog() {
     setLoading(true)
     let q = supabase.from('ap_invoice_data').select('*', { count: 'exact' })
       .order('submitted_at', { ascending: false })
-      .range(page * PAGE, page * PAGE + PAGE - 1)
 
-    if (qtr !== 'all') q = q.eq('quarter', qtr)
     if (docType !== 'all') q = q.eq('doc_type', docType)
     if (search.trim()) q = q.or(`invoice_no.ilike.%${search}%,vendor_code.ilike.%${search}%,po_no.ilike.%${search}%,email.ilike.%${search}%`)
+    if (qtr === 'all') q = q.range(page * PAGE, page * PAGE + PAGE - 1)
+    else q = q.range(0, 4999)
 
     const { data, count } = await q
-    setRows(data ?? [])
-    setTotal(count ?? 0)
+    const filtered = qtr === 'all' ? (data ?? []) : (data ?? []).filter(r => rowFiscalQuarter(r) === qtr)
+    setRows(qtr === 'all' ? filtered : filtered.slice(page * PAGE, page * PAGE + PAGE - 1))
+    setTotal(qtr === 'all' ? (count ?? 0) : filtered.length)
     setLoading(false)
   }, [page, qtr, docType, search])
 

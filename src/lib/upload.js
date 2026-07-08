@@ -6,6 +6,13 @@ import { supabase } from './supabase'
 function parseDate(s) {
   if (!s || String(s).trim() === '') return null
   const raw = String(s).trim()
+  if (/^\d+(\.\d+)?$/.test(raw)) {
+    const serial = Number(raw)
+    if (serial > 20000 && serial < 80000) {
+      const d = new Date(Date.UTC(1899, 11, 30) + serial * 86400000)
+      if (!isNaN(d)) return d
+    }
+  }
   const dayFirst = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+(.+))?$/)
   if (dayFirst) {
     const [, dd, mm, yyyy, time = ''] = dayFirst
@@ -38,8 +45,10 @@ function quarterLabel(dateStr) {
   if (!dateStr) return null
   const d = new Date(dateStr)
   if (isNaN(d)) return null
-  const q = Math.ceil((d.getMonth() + 1) / 3)
-  return `${d.getFullYear()}Q${q}`
+  const m = d.getMonth()
+  const q = m < 3 ? 4 : m < 6 ? 1 : m < 9 ? 2 : 3
+  const fiscalYear = m < 3 ? d.getFullYear() : d.getFullYear() + 1
+  return `${fiscalYear}Q${q}`
 }
 
 function monthLabel(dateStr) {

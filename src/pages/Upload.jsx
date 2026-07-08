@@ -22,12 +22,13 @@ const HELP = {
     { name: 'Add conflict key', formula: 'vch_no + account + entry_date' },
     { name: 'Modify conflict key', formula: 'vch_no + account + modified_at + modified_by' },
     { name: 'Invoice Data conflict key', formula: 'invoice_no + vendor_code + submitted_at' },
-    { name: 'Quarter', formula: 'year(submitted/entry date) + Q + calendar quarter number' },
+    { name: 'Quarter', formula: 'Fiscal quarter: Apr-Jun Q1, Jul-Sep Q2, Oct-Dec Q3, Jan-Mar Q4; year is FY ending year' },
     { name: 'Month Label', formula: 'MMM YYYY from submitted/entry date' },
   ],
   notes: [
     'Invoice Data files may contain a preamble row; ingestion scans for the real header row.',
     'Busy dates are parsed as day-first dates to avoid month/day swaps.',
+    'Excel serial dates such as 45944 are converted into real dates during upload.',
   ],
 }
 

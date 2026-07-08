@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { Card, InfoBox, NoteBox, ProgressBar, Tag, Spinner, EmptyState, HelpButton } from '../components/UI'
-import { buildVoucherSummary, qtrText, rateColor } from '../lib/insights'
+import { buildVoucherSummary, qtrText, rateColor, rowFiscalQuarter } from '../lib/insights'
 
 const HELP = {
   title: 'Error Rate',
@@ -73,7 +73,7 @@ export default function ErrorRate() {
   })
   const topSeries = Object.entries(bySeries).sort((a, b) => b[1] - a[1]).slice(0, 10)
 
-  const quarters = [...new Set([...addData, ...modData].map(r => r.quarter).filter(Boolean))].sort()
+  const quarters = [...new Set([...addData, ...modData].map(rowFiscalQuarter).filter(Boolean))].sort()
   const displayQtrs = qtr === 'all' ? quarters : [qtr]
   const tableRows = []
   displayQtrs.forEach(q => {

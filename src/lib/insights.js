@@ -26,6 +26,26 @@ export function qtrText(qtr) {
   return qtr === 'all' ? 'All Quarters' : qtr.replace(/(\d{4})Q(\d)/, 'Q$2 $1')
 }
 
+export function fiscalQuarterLabel(value) {
+  if (!value) return null
+  const d = new Date(value)
+  if (isNaN(d)) return null
+  const month = d.getMonth()
+  const quarter = month < 3 ? 4 : month < 6 ? 1 : month < 9 ? 2 : 3
+  const fiscalYear = month < 3 ? d.getFullYear() : d.getFullYear() + 1
+  return `${fiscalYear}Q${quarter}`
+}
+
+export function rowFiscalQuarter(row) {
+  return fiscalQuarterLabel(row?.submitted_at)
+    || fiscalQuarterLabel(row?.entry_date)
+    || fiscalQuarterLabel(row?.modified_at)
+    || fiscalQuarterLabel(row?.month_date)
+    || fiscalQuarterLabel(row?.month_label ? '01 ' + row.month_label : null)
+    || row?.quarter
+    || null
+}
+
 function startOfDay(value) {
   if (!value) return null
   const d = new Date(value)
@@ -42,8 +62,11 @@ export function daysBetween(start, end) {
 
 export function buildVoucherSummary(addRows, modifyRows) {
   const addUnique = uniqueBy(addRows, r => normalizeVoucherKey(r.vch_no))
-  const modifyUnique = uniqueBy(modifyRows, r => normalizeVoucherKey(r.vch_no))
   const modifyByVoucher = new Map()
+  const modifyUnique = uniqueBy(modifyRows, r => normalizeVoucherKey(r.vch_no)).map(r => ({
+    ...r,
+    quarter: rowFiscalQuarter(r),
+  }))
 
   modifyUnique.forEach(r => {
     const key = normalizeVoucherKey(r.vch_no)
@@ -62,7 +85,7 @@ export function buildVoucherSummary(addRows, modifyRows) {
       key,
       added_by: r.added_by || 'Unknown',
       entry_date: r.entry_date,
-      quarter: r.quarter,
+      quarter: rowFiscalQuarter(r),
       month_label: r.month_label,
       series: r.series,
       type: r.type,
@@ -93,6 +116,7 @@ export function buildInvoiceTatRows(invoiceRows, addRows, modifyRows) {
     return {
       ...inv,
       key,
+      quarter: rowFiscalQuarter(inv),
       add_in_busy: add?.entry_date || null,
       if_modify: mod?.modified_at || null,
       tat,
