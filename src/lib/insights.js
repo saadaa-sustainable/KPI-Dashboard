@@ -32,8 +32,7 @@ export function fiscalQuarterLabel(value) {
   if (isNaN(d)) return null
   const month = d.getMonth()
   const quarter = month < 3 ? 4 : month < 6 ? 1 : month < 9 ? 2 : 3
-  const fiscalYear = month < 3 ? d.getFullYear() : d.getFullYear() + 1
-  return `${fiscalYear}Q${quarter}`
+  return `${d.getFullYear()}Q${quarter}`
 }
 
 export function rowFiscalQuarter(row) {

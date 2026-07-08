@@ -1,9 +1,7 @@
-import { useEffect, useState, useCallback } from 'react'
-import { supabase } from '../lib/supabase'
-import { fetchAllRows } from '../lib/db'
+import { useEffect, useMemo, useState } from 'react'
 import { useQtr } from '../components/AppShell'
 import { Card, Tag, Spinner, EmptyState, StatusTag, HelpButton } from '../components/UI'
-import { buildInvoiceTatRows, rowFiscalQuarter } from '../lib/insights'
+import { buildInvoiceTatRows, qtrText, rowFiscalQuarter } from '../lib/insights'
 
 const PAGE = 100
 const shortPO = s => (s || '')
@@ -30,52 +28,27 @@ const HELP = {
     { name: 'Remark', formula: 'Delay if TAT > 5 days; otherwise On Time' },
   ],
   notes: [
-    'The table is paginated server-side, 100 invoice rows at a time.',
+    'The table is paginated 100 invoice rows at a time.',
     'Search checks invoice number, vendor code, PO number, and email.',
   ],
 }
 
 export default function InvoiceLog() {
-  const { qtr } = useQtr()
-  const [rows, setRows] = useState([])
-  const [total, setTotal] = useState(0)
+  const { qtr, data, dataLoading, dataError } = useQtr()
   const [page, setPage] = useState(0)
   const [docType, setDocType] = useState('all')
   const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [addRows, setAddRows] = useState([])
-  const [modifyRows, setModifyRows] = useState([])
 
-  useEffect(() => {
-    Promise.all([
-      fetchAllRows(() => supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by')),
-      fetchAllRows(() => supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by')),
-    ]).then(([add, mod]) => {
-      setAddRows(add)
-      setModifyRows(mod)
-    })
-  }, [])
-
-  const fetchRows = useCallback(async () => {
-    setLoading(true)
-    let q = supabase.from('ap_invoice_data').select('*', { count: 'exact' })
-      .order('submitted_at', { ascending: false })
-      .not('submitted_at', 'is', null)
-
-    if (docType !== 'all') q = q.eq('doc_type', docType)
-    if (search.trim()) q = q.or(`invoice_no.ilike.%${search}%,vendor_code.ilike.%${search}%,po_no.ilike.%${search}%,email.ilike.%${search}%`)
-    if (qtr === 'all') q = q.range(page * PAGE, page * PAGE + PAGE - 1)
-    else q = q.range(0, 4999)
-
-    const { data, count } = await q
-    const filtered = qtr === 'all' ? (data ?? []) : (data ?? []).filter(r => rowFiscalQuarter(r) === qtr)
-    setRows(qtr === 'all' ? filtered : filtered.slice(page * PAGE, page * PAGE + PAGE - 1))
-    setTotal(qtr === 'all' ? (count ?? 0) : filtered.length)
-    setLoading(false)
-  }, [page, qtr, docType, search])
-
-  useEffect(() => { fetchRows() }, [fetchRows])
   useEffect(() => { setPage(0) }, [qtr, docType, search])
+
+  const filteredRows = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return data.inv
+      .filter(r => qtr === 'all' || rowFiscalQuarter(r) === qtr)
+      .filter(r => docType === 'all' || r.doc_type === docType)
+      .filter(r => !term || [r.invoice_no, r.vendor_code, r.po_no, r.email].some(v => String(v || '').toLowerCase().includes(term)))
+      .sort((a, b) => new Date(b.submitted_at || 0) - new Date(a.submitted_at || 0))
+  }, [data.inv, qtr, docType, search])
 
   const docOptions = [
     { value: 'all', label: 'All' },
@@ -83,9 +56,11 @@ export default function InvoiceLog() {
     { value: 'CREDIT NOTE', label: 'Credit Note' },
     { value: 'DEBIT NOTE', label: 'Debit Note' },
   ]
+  const total = filteredRows.length
+  const rows = useMemo(() => filteredRows.slice(page * PAGE, page * PAGE + PAGE), [filteredRows, page])
   const totalPages = Math.ceil(total / PAGE)
-  const qtrLabel = qtr === 'all' ? 'All Quarters' : qtr.replace(/(\d{4})Q(\d)/, 'Q$2 $1')
-  const displayRows = buildInvoiceTatRows(rows, addRows, modifyRows)
+  const qtrLabel = qtrText(qtr)
+  const displayRows = useMemo(() => buildInvoiceTatRows(rows, data.add, data.mod), [rows, data.add, data.mod])
 
   return (
     <>
@@ -107,8 +82,10 @@ export default function InvoiceLog() {
       </div>
 
       <Card title="Invoice Records" titleRight={`${total.toLocaleString()} records`}>
-        {loading
+        {dataLoading
           ? <div style={{ padding: 32, textAlign: 'center' }}><Spinner /></div>
+          : dataError
+          ? <EmptyState icon="!" title="Could not load invoice records" sub={dataError.message} />
           : rows.length === 0
           ? <EmptyState icon="[]" title="No records match" sub="Try adjusting filters or search." />
           : <>

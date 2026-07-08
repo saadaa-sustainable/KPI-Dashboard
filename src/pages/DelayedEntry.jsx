@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { fetchAllRows } from '../lib/db'
+import { useMemo, useRef } from 'react'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { KpiCard, Card, Tag, Spinner, EmptyState, InfoBox, HelpButton } from '../components/UI'
@@ -37,33 +35,17 @@ function avg(values) {
 }
 
 export default function DelayedEntry() {
-  const { qtr } = useQtr()
-  const [invoiceRows, setInvoiceRows] = useState([])
-  const [addRows, setAddRows] = useState([])
-  const [modifyRows, setModifyRows] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { qtr, data, dataLoading, dataError } = useQtr()
+  const invoiceRows = data.inv
+  const addRows = data.add
+  const modifyRows = data.mod
 
   const refPerson = useRef(null)
   const refMonthly = useRef(null)
   const refPO = useRef(null)
   const refRemark = useRef(null)
 
-  useEffect(() => { fetchAll() }, [])
-
-  async function fetchAll() {
-    setLoading(true)
-    const [inv, add, mod] = await Promise.all([
-      fetchAllRows(() => supabase.from('ap_invoice_data').select('submitted_at, month_label, quarter, email, po_no, vendor_code, po_type, doc_type, invoice_no, invoice_date').not('submitted_at', 'is', null)),
-      fetchAllRows(() => supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type')),
-      fetchAllRows(() => supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type')),
-    ])
-    setInvoiceRows(inv)
-    setAddRows(add)
-    setModifyRows(mod)
-    setLoading(false)
-  }
-
-  const enriched = buildInvoiceTatRows(invoiceRows, addRows, modifyRows)
+  const enriched = useMemo(() => buildInvoiceTatRows(invoiceRows, addRows, modifyRows), [invoiceRows, addRows, modifyRows])
   const filtered = qtr === 'all' ? enriched : enriched.filter(r => r.quarter === qtr)
   const withTat = filtered.filter(r => r.remark)
 
@@ -143,7 +125,8 @@ export default function DelayedEntry() {
     options: { legend: true, extra: { cutout: '68%' } }
   } : null, [withTat.length, qtr])
 
-  if (loading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
+  if (dataLoading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
+  if (dataError) return <EmptyState icon="!" title="Could not load invoice TAT data" sub={dataError.message} />
   if (!invoiceRows.length) return <EmptyState icon="[]" title="No invoice data" sub="Upload Invoice Data, Add, and Modify CSVs to recreate the OG TAT insights." />
 
   const qtrLabel = qtrText(qtr)

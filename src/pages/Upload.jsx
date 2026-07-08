@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadCSV } from '../lib/upload'
 import { Card, NoteBox, Tag, Spinner, HelpButton } from '../components/UI'
+import { useQtr } from '../components/AppShell'
 
 const FILE_CONFIGS = {
   add: { icon: '+', label: 'Add Log', hint: 'KPI Dashboard - Add.csv', table: 'ap_voucher_add' },
@@ -22,7 +23,7 @@ const HELP = {
     { name: 'Add conflict key', formula: 'vch_no + account + entry_date' },
     { name: 'Modify conflict key', formula: 'vch_no + account + modified_at + modified_by' },
     { name: 'Invoice Data conflict key', formula: 'invoice_no + vendor_code + submitted_at' },
-    { name: 'Quarter', formula: 'Fiscal quarter: Apr-Jun Q1, Jul-Sep Q2, Oct-Dec Q3, Jan-Mar Q4; year is FY ending year' },
+    { name: 'Quarter', formula: 'Fiscal quarter: Apr-Jun Q1, Jul-Sep Q2, Oct-Dec Q3, Jan-Mar Q4; year is the calendar year of those dates' },
     { name: 'Month Label', formula: 'MMM YYYY from submitted/entry date' },
   ],
   notes: [
@@ -121,6 +122,7 @@ function UploadZone({ fileType, onUpload }) {
 }
 
 export default function Upload() {
+  const { refreshData } = useQtr()
   const [log, setLog] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -136,6 +138,10 @@ export default function Upload() {
     if (error) console.error('Log fetch error:', error)
     setLog(data ?? [])
     setLoading(false)
+  }
+
+  async function handleUploadComplete() {
+    await Promise.all([fetchLog(), refreshData()])
   }
 
   return (
@@ -154,7 +160,7 @@ export default function Upload() {
 
       <div className="upload-grid mb">
         {Object.keys(FILE_CONFIGS).map(ft => (
-          <UploadZone key={ft} fileType={ft} onUpload={fetchLog} />
+          <UploadZone key={ft} fileType={ft} onUpload={handleUploadComplete} />
         ))}
       </div>
 

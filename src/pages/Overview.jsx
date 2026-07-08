@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { fetchAllRows } from '../lib/db'
+import { useMemo, useRef } from 'react'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { KpiCard, Card, EmptyState, Spinner, HelpButton, Tag } from '../components/UI'
@@ -29,39 +27,22 @@ function avg(values) {
 }
 
 export default function Overview() {
-  const { qtr } = useQtr()
-  const [add, setAdd] = useState([])
-  const [mod, setMod] = useState([])
-  const [inv, setInv] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { qtr, data, dataLoading, dataError } = useQtr()
+  const add = data.add
+  const mod = data.mod
+  const inv = data.inv
 
   const refAddMod = useRef(null)
   const refInvoiceMonth = useRef(null)
   const refPO = useRef(null)
   const refPerson = useRef(null)
 
-  useEffect(() => { fetchAll() }, [])
-
-  async function fetchAll() {
-    setLoading(true)
-    const [a, m, i] = await Promise.all([
-      fetchAllRows(() => supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type')),
-      fetchAllRows(() => supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type')),
-      fetchAllRows(() => supabase.from('ap_invoice_data').select('invoice_no, vendor_code, po_type, doc_type, submitted_at, quarter, month_label').not('submitted_at', 'is', null)),
-    ])
-
-    setAdd(a)
-    setMod(m)
-    setInv(i)
-    setLoading(false)
-  }
-
-  const voucherSummary = buildVoucherSummary(add, mod)
+  const voucherSummary = useMemo(() => buildVoucherSummary(add, mod), [add, mod])
   const summaryRows = qtr === 'all' ? voucherSummary.rows : voucherSummary.rows.filter(r => r.quarter === qtr)
   const filtAdd = summaryRows
   const filtMod = summaryRows.filter(r => r.is_modified)
   const filtInv = qtr === 'all' ? inv : inv.filter(r => rowFiscalQuarter(r) === qtr)
-  const tatRows = buildInvoiceTatRows(inv, add, mod)
+  const tatRows = useMemo(() => buildInvoiceTatRows(inv, add, mod), [inv, add, mod])
   const filtTat = qtr === 'all' ? tatRows : tatRows.filter(r => r.quarter === qtr)
   const matchedTat = filtTat.filter(r => r.remark)
   const delayed = matchedTat.filter(r => r.remark === 'Delay').length
@@ -139,7 +120,8 @@ export default function Overview() {
     }
   })() : null, [personRows.length, filtAdd.length, matchedTat.length, qtr])
 
-  if (loading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
+  if (dataLoading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
+  if (dataError) return <EmptyState icon="!" title="Could not load dashboard data" sub={dataError.message} />
   if (!add.length && !mod.length && !inv.length) return <EmptyState icon="[]" title="No data loaded" sub="Upload Add, Modify, and Invoice Data CSVs to populate the dashboard." />
 
   return (

@@ -1,6 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
-import { supabase } from '../lib/supabase'
-import { fetchAllRows } from '../lib/db'
+import { useMemo, useRef } from 'react'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { Card, InfoBox, NoteBox, ProgressBar, Tag, Spinner, EmptyState, HelpButton } from '../components/UI'
@@ -29,27 +27,13 @@ const HELP = {
 }
 
 export default function ErrorRate() {
-  const { qtr } = useQtr()
-  const [addData, setAddData] = useState([])
-  const [modData, setModData] = useState([])
-  const [loading, setLoading] = useState(true)
+  const { qtr, data, dataLoading, dataError } = useQtr()
+  const addData = data.add
+  const modData = data.mod
   const refRate = useRef(null)
   const refSeries = useRef(null)
 
-  useEffect(() => { fetchAll() }, [])
-
-  async function fetchAll() {
-    setLoading(true)
-    const [addRes, modRes] = await Promise.all([
-      fetchAllRows(() => supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type')),
-      fetchAllRows(() => supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type')),
-    ])
-    setAddData(addRes)
-    setModData(modRes)
-    setLoading(false)
-  }
-
-  const voucherSummary = buildVoucherSummary(addData, modData)
+  const voucherSummary = useMemo(() => buildVoucherSummary(addData, modData), [addData, modData])
   const summaryRows = qtr === 'all' ? voucherSummary.rows : voucherSummary.rows.filter(r => r.quarter === qtr)
   const filteredMod = qtr === 'all' ? voucherSummary.modifyUnique : voucherSummary.modifyUnique.filter(r => r.quarter === qtr)
 
@@ -112,7 +96,8 @@ export default function ErrorRate() {
     datasets: [{ data: topSeries.map(s => s[1]), backgroundColor: 'rgba(159,122,234,0.2)', borderColor: '#9f7aea', borderWidth: 1, borderRadius: 6 }]
   } : null, [filteredMod.length, qtr])
 
-  if (loading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
+  if (dataLoading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
+  if (dataError) return <EmptyState icon="!" title="Could not load voucher data" sub={dataError.message} />
   if (!addData.length && !modData.length) return <EmptyState icon="!" title="No voucher data" sub="Upload Add and Modify CSVs to see error rate analysis." />
 
   const totalAdded = summaryRows.length

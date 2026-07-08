@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllRows } from '../lib/db'
 import { useChart } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { KpiCard, Card, NoteBox, Tag, Spinner, EmptyState, HelpButton } from '../components/UI'
+import { qtrText, rowFiscalQuarter } from '../lib/insights'
 
 const fmt = n => n!=null ? `₹${Number(n).toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'
 const pct  = n => n!=null ? `${Number(n).toFixed(2)}%` : '—'
@@ -41,13 +43,13 @@ export default function CostSavings() {
 
   async function fetchAll() {
     setLoading(true)
-    const { data } = await supabase.from('ap_cost_saved').select('*').order('month_date')
-    setRows(data ?? [])
+    const data = await fetchAllRows(() => supabase.from('ap_cost_saved').select('*').order('month_date'))
+    setRows(data)
     setLoading(false)
   }
 
-  // Cost saved doesn't have quarter — filter by month_date range if needed
-  const filtered = rows.filter(r => cat === 'all' || r.category === cat)
+  const qtrRows = qtr === 'all' ? rows : rows.filter(r => rowFiscalQuarter(r) === qtr)
+  const filtered = qtrRows.filter(r => cat === 'all' || r.category === cat)
 
   const totalInvoice = filtered.reduce((a,r)=>a+(r.invoice_amt||0),0)
   const totalSaving  = filtered.reduce((a,r)=>a+(r.saving_amt||0),0)
@@ -63,9 +65,9 @@ export default function CostSavings() {
   })
   const subKeys = Object.keys(bySub).sort((a,b)=>bySub[b].saving-bySub[a].saving)
 
-  const months = [...new Set(rows.map(r=>r.month_label).filter(Boolean))].sort((a,b)=>new Date('01 '+a)-new Date('01 '+b))
+  const months = [...new Set(qtrRows.map(r=>r.month_label).filter(Boolean))].sort((a,b)=>new Date('01 '+a)-new Date('01 '+b))
   const byMonthCat = {}
-  rows.forEach(r => {
+  qtrRows.forEach(r => {
     if (!r.month_label) return
     if (!byMonthCat[r.month_label]) byMonthCat[r.month_label]={AP:{invoice:0,saving:0},AR:{invoice:0,saving:0}}
     const c = r.category||'AP'
@@ -81,7 +83,7 @@ export default function CostSavings() {
       { label:'Invoice', data:subKeys.map(k=>bySub[k].invoice), backgroundColor:'rgba(91,141,238,0.2)', borderColor:'#5b8dee', borderWidth:1, borderRadius:6 },
       { label:'Saving',  data:subKeys.map(k=>bySub[k].saving),  backgroundColor:'rgba(54,200,122,0.2)', borderColor:'#36c87a', borderWidth:1, borderRadius:6 },
     ], options:{legend:true}
-  } : null, [filtered.length, cat])
+  } : null, [filtered.length, cat, qtr])
 
   useChart(refTrend, months.length > 0 ? {
     type:'line', labels:months,
@@ -89,7 +91,7 @@ export default function CostSavings() {
       { label:'AP Saving %', data:months.map(m=>{const d=byMonthCat[m]?.AP; return d&&d.invoice>0?(d.saving/d.invoice*100).toFixed(2):0}), borderColor:'#5b8dee', backgroundColor:'rgba(91,141,238,0.06)', fill:true, tension:0.4, pointRadius:4 },
       { label:'AR Saving %', data:months.map(m=>{const d=byMonthCat[m]?.AR; return d&&d.invoice>0?(d.saving/d.invoice*100).toFixed(2):0}), borderColor:'#36c87a', backgroundColor:'rgba(54,200,122,0.06)', fill:true, tension:0.4, pointRadius:4 },
     ], options:{legend:true, pct:true}
-  } : null, [rows.length])
+  } : null, [qtrRows.length, qtr])
 
   if (loading) return <div style={{padding:60,textAlign:'center'}}><Spinner /></div>
   if (!rows.length) return <EmptyState icon="₹" title="No cost savings data" sub="Upload the Cost Saved Achieved CSV." />
@@ -103,7 +105,7 @@ export default function CostSavings() {
           <div className="page-title">Cost Savings</div>
           <HelpButton {...HELP} />
         </div>
-        <div className="page-sub">AP debit note recoveries and AR logistics deductions</div>
+        <div className="page-sub">AP debit note recoveries and AR logistics deductions - {qtrText(qtr)}</div>
       </div>
 
       <div className="kpi-row mb">

@@ -6,7 +6,16 @@ import { fetchAllRows } from '../lib/db'
 import { rowFiscalQuarter } from '../lib/insights'
 
 // ── Quarter context — shared across all pages ──────────────────────────────
-export const QtrContext = createContext({ qtr: 'all', setQtr: () => {} })
+const EMPTY_DATA = { add: [], mod: [], inv: [] }
+
+export const QtrContext = createContext({
+  qtr: 'all',
+  setQtr: () => {},
+  data: EMPTY_DATA,
+  dataLoading: true,
+  dataError: null,
+  refreshData: () => {},
+})
 export function useQtr() { return useContext(QtrContext) }
 
 const NAV = [
@@ -23,18 +32,37 @@ export default function AppShell() {
   const navigate = useNavigate()
   const [qtr,      setQtr]     = useState('all')
   const [quarters, setQuarters] = useState([])
+  const [data, setData] = useState(EMPTY_DATA)
+  const [dataLoading, setDataLoading] = useState(true)
+  const [dataError, setDataError] = useState(null)
 
-  useEffect(() => {
-    // Fetch available quarters from the three primary source tables.
-    Promise.all([
-      fetchAllRows(() => supabase.from('ap_voucher_add').select('entry_date, quarter')),
-      fetchAllRows(() => supabase.from('ap_voucher_modify').select('modified_at, quarter')),
-      fetchAllRows(() => supabase.from('ap_invoice_data').select('submitted_at, quarter').not('submitted_at', 'is', null)),
-    ]).then(([add, mod, inv]) => {
+  async function loadPrimaryData() {
+    setDataLoading(true)
+    setDataError(null)
+    try {
+      const [add, mod, inv] = await Promise.all([
+        fetchAllRows(() => supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type')),
+        fetchAllRows(() => supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type')),
+        fetchAllRows(() => supabase.from('ap_invoice_data').select('submitted_at, month_label, quarter, email, po_no, vendor_code, po_type, doc_type, invoice_no, invoice_date').not('submitted_at', 'is', null)),
+      ])
+
+      setData({ add, mod, inv })
       const all = [...add, ...mod, ...inv].map(rowFiscalQuarter).filter(Boolean)
       const unique = [...new Set(all)].sort()
       setQuarters(unique)
-    })
+      if (qtr !== 'all' && !unique.includes(qtr)) setQtr('all')
+    } catch (error) {
+      console.error('Primary data load error:', error)
+      setDataError(error)
+      setData(EMPTY_DATA)
+      setQuarters([])
+    } finally {
+      setDataLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPrimaryData()
   }, [])
 
   async function handleSignOut() {
@@ -43,7 +71,7 @@ export default function AppShell() {
   }
 
   return (
-    <QtrContext.Provider value={{ qtr, setQtr }}>
+    <QtrContext.Provider value={{ qtr, setQtr, data, dataLoading, dataError, refreshData: loadPrimaryData }}>
       <div className="app-shell">
         <header className="header">
           <div className="header-brand">

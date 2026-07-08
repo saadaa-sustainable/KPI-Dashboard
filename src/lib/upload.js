@@ -47,8 +47,7 @@ function quarterLabel(dateStr) {
   if (isNaN(d)) return null
   const m = d.getMonth()
   const q = m < 3 ? 4 : m < 6 ? 1 : m < 9 ? 2 : 3
-  const fiscalYear = m < 3 ? d.getFullYear() : d.getFullYear() + 1
-  return `${fiscalYear}Q${q}`
+  return `${d.getFullYear()}Q${q}`
 }
 
 function monthLabel(dateStr) {
