@@ -167,7 +167,6 @@ function transformInvoiceData(row) {
     month_label:  monthLabel(submittedAt),
     quarter:      quarterLabel(submittedAt),
     email:        (row['Email address'] || row['Email'] || '').trim() || null,
-    association:  (row['Your Association with SAADAA'] || row['Association'] || '').trim() || null,
     invoice_no:   (row['Invoice Number'] || '').trim() || null,
     vendor_code:  (row['Vendor Code'] || '').trim() || null,
     po_no:        (row['PO No'] || row['PO No.'] || row['PO No. issued by SAADAA'] || '').trim() || null,

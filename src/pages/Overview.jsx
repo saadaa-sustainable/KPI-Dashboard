@@ -41,7 +41,7 @@ export default function Overview() {
     const [a, m, i] = await Promise.all([
       supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type'),
       supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type'),
-      supabase.from('ap_invoice_data').select('invoice_no, vendor_code, po_type, doc_type, submitted_at, quarter, month_label, association'),
+      supabase.from('ap_invoice_data').select('invoice_no, vendor_code, po_type, doc_type, submitted_at, quarter, month_label'),
     ])
 
     setAdd(a.data ?? [])
