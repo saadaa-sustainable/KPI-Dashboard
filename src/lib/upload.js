@@ -5,7 +5,15 @@ import { supabase } from './supabase'
 
 function parseDate(s) {
   if (!s || String(s).trim() === '') return null
-  const d = new Date(s)
+  const raw = String(s).trim()
+  const dayFirst = raw.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})(?:\s+(.+))?$/)
+  if (dayFirst) {
+    const [, dd, mm, yyyy, time = ''] = dayFirst
+    const year = yyyy.length === 2 ? `20${yyyy}` : yyyy
+    const d = new Date(`${year}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}${time ? ` ${time}` : ''}`)
+    if (!isNaN(d)) return d
+  }
+  const d = new Date(raw)
   if (!isNaN(d)) return d
   return null
 }
@@ -55,12 +63,35 @@ function rowHash(obj) {
 
 export function detectFileType(headers) {
   const h = headers.map(x => (x || '').trim().toLowerCase())
-  if (h.some(x => x.includes('your association with saadaa'))) return 'tat'
-  if (h.includes('action') && h.some(x => x.includes('org.vch'))) return 'modify'
-  if (h.includes('action') && h.includes('name') && !h.some(x => x.includes('org.vch'))) return 'add'
-  if (h.some(x => x.includes('invoice number')) && h.some(x => x.includes('po type')) && !h.some(x => x.includes('association'))) return 'invoice_data'
+  if (h.some(x => x.includes('your association with saadaa')) && (h.includes('remark') || h.includes('tat') || h.includes('add in busy'))) return 'tat'
+  if (h.includes('action') && h.includes('name')) return 'busy_log'
+  if (h.some(x => x.includes('invoice number')) && h.some(x => x.includes('po type')) && (h.includes('timestamp') || h.includes('email address'))) return 'invoice_data'
   if (h.some(x => x.includes('saving_amt')) || h.some(x => x.includes('saving amt'))) return 'cost_saved'
   return null
+}
+
+function normaliseParsedRows(rows) {
+  const matrix = rows.filter(r => Array.isArray(r) && r.some(c => String(c ?? '').trim() !== ''))
+  const headerIndex = matrix.findIndex(r => detectFileType(r))
+  if (headerIndex === -1) {
+    return { headers: matrix[0] || [], data: [], fileType: null }
+  }
+
+  const headers = matrix[headerIndex].map(h => String(h ?? '').trim())
+  let fileType = detectFileType(headers)
+  const data = matrix.slice(headerIndex + 1).map(row => {
+    const obj = {}
+    headers.forEach((h, i) => {
+      if (h) obj[h] = row[i]
+    })
+    return obj
+  })
+  if (fileType === 'busy_log') {
+    const action = data.map(r => String(r.Action || '').trim().toLowerCase()).find(Boolean)
+    fileType = action === 'modify' ? 'modify' : action === 'add' ? 'add' : null
+  }
+
+  return { headers, data, fileType }
 }
 
 // ── Transformers ───────────────────────────────────────────────────────────
@@ -135,6 +166,8 @@ function transformInvoiceData(row) {
     submitted_at: submittedAt,
     month_label:  monthLabel(submittedAt),
     quarter:      quarterLabel(submittedAt),
+    email:        (row['Email address'] || row['Email'] || '').trim() || null,
+    association:  (row['Your Association with SAADAA'] || row['Association'] || '').trim() || null,
     invoice_no:   (row['Invoice Number'] || '').trim() || null,
     vendor_code:  (row['Vendor Code'] || '').trim() || null,
     po_no:        (row['PO No'] || row['PO No.'] || row['PO No. issued by SAADAA'] || '').trim() || null,
@@ -142,7 +175,6 @@ function transformInvoiceData(row) {
     doc_type:     (row['TYPE OF DOCUMENT`'] || row['Document Type'] || row['TYPE OF DOCUMENT'] || '').trim() || null,
     invoice_date: toDateStr(row['Invoice Date']),
     amount:       toNum(row['Amount'] || row['Invoice Amount']),
-    email:        (row['Email address'] || row['Email'] || '').trim() || null,
   }
   return { ...base, row_hash: rowHash(base) }
 }
@@ -179,12 +211,11 @@ const BATCH_SIZE = 2000
 export async function uploadCSV(file, onProgress) {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
-      header: true,
+      header: false,
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          const headers = results.meta.fields || []
-          const fileType = detectFileType(headers)
+          const { headers, data, fileType } = normaliseParsedRows(results.data || [])
 
           if (!fileType) {
             return reject(new Error(
@@ -193,7 +224,7 @@ export async function uploadCSV(file, onProgress) {
           }
 
           const cfg = CONFIGS[fileType]
-          const rawRows = results.data
+          const rawRows = data
             .map(cfg.fn)
             .filter(r => r !== null && r.row_hash)
 

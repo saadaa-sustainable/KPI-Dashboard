@@ -1,23 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { uploadCSV, detectFileType } from '../lib/upload'
+import { uploadCSV } from '../lib/upload'
 import { Card, NoteBox, Tag, Spinner } from '../components/UI'
-import Papa from 'papaparse'
 
 const FILE_CONFIGS = {
-  tat:          { icon: '📋', label: 'AP Invoice TAT Working', hint: 'KPI_Dashboard_-_AP_INVOICE_TAT_Working_.csv', table: 'ap_invoice_tat' },
-  modify:       { icon: '✎',  label: 'Modify Log',             hint: 'KPI_Dashboard_-_Modify.csv',                 table: 'ap_voucher_modify' },
-  add:          { icon: '➕',  label: 'Add Log',                hint: 'KPI_Dashboard_-_Add.csv',                    table: 'ap_voucher_add' },
-  invoice_data: { icon: '🗂',  label: 'Invoice Data',           hint: 'KPI_Dashboard_-_Invoice_Data.csv',           table: 'ap_invoice_data' },
-  cost_saved:   { icon: '₹',  label: 'Cost Saved Achieved',    hint: 'KPI_Dashboard_-_Cost_saved_achieved.csv',    table: 'ap_cost_saved' },
+  add: { icon: '+', label: 'Add Log', hint: 'KPI Dashboard - Add.csv', table: 'ap_voucher_add' },
+  modify: { icon: '*', label: 'Modify Log', hint: 'KPI Dashboard - Modify.csv', table: 'ap_voucher_modify' },
+  invoice_data: { icon: '#', label: 'Invoice Data', hint: 'KPI Dashboard - Invoice Data.csv', table: 'ap_invoice_data' },
 }
 
 function UploadZone({ fileType, onUpload }) {
-  const [state,    setState]    = useState('idle')
+  const [state, setState] = useState('idle')
   const [progress, setProgress] = useState(0)
-  const [total,    setTotal]    = useState(0)
-  const [done,     setDone]     = useState(0)
-  const [error,    setError]    = useState(null)
+  const [total, setTotal] = useState(0)
+  const [done, setDone] = useState(0)
+  const [error, setError] = useState(null)
   const inputRef = useRef(null)
   const cfg = FILE_CONFIGS[fileType]
 
@@ -31,7 +28,7 @@ function UploadZone({ fileType, onUpload }) {
       const res = await uploadCSV(file, ({ processed, total: t }) => {
         setTotal(t)
         setDone(processed)
-        setProgress(Math.round(processed / t * 100))
+        setProgress(t > 0 ? Math.round(processed / t * 100) : 100)
       })
       setState('done')
       setTotal(res.total)
@@ -42,7 +39,13 @@ function UploadZone({ fileType, onUpload }) {
     }
   }
 
-  function reset() { setState('idle'); setError(null); setProgress(0); setTotal(0); setDone(0) }
+  function reset() {
+    setState('idle')
+    setError(null)
+    setProgress(0)
+    setTotal(0)
+    setDone(0)
+  }
 
   return (
     <div
@@ -77,7 +80,7 @@ function UploadZone({ fileType, onUpload }) {
 
       {state === 'done' && (
         <>
-          <div className="upload-zone-title">✓ Upload complete</div>
+          <div className="upload-zone-title">Upload complete</div>
           <div className="upload-zone-sub">{total.toLocaleString()} rows processed</div>
           <button className="fbtn" style={{ marginTop: 8 }} onClick={e => { e.stopPropagation(); reset() }}>Upload again</button>
         </>
@@ -95,7 +98,7 @@ function UploadZone({ fileType, onUpload }) {
 }
 
 export default function Upload() {
-  const [log,     setLog]     = useState([])
+  const [log, setLog] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => { fetchLog() }, [])
@@ -115,10 +118,10 @@ export default function Upload() {
   return (
     <>
       <div className="page-title">Upload CSV Data</div>
-      <div className="page-sub">Upload any of the 5 supported files. Files are auto-detected — duplicates are skipped, changed rows are updated.</div>
+      <div className="page-sub">Upload the 3 primary source files. Files are auto-detected - duplicates are skipped, changed rows are updated.</div>
 
       <NoteBox>
-        Export each sheet from KPI_Dashboard.xlsx as CSV. Upload one file at a time. Large files (Add Log = 143k rows) take 8-10 mins — keep the tab open.
+        Upload Add, Modify, and Invoice Data CSVs one file at a time. Large Add/Modify files can take several minutes - keep the tab open.
       </NoteBox>
 
       <div className="upload-grid mb">

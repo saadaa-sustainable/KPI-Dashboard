@@ -10,8 +10,7 @@ export function useQtr() { return useContext(QtrContext) }
 const NAV = [
   { to: '/',               icon: '▦', label: 'Overview' },
   { to: '/error-rate',     icon: '✎', label: 'Error Rate' },
-  { to: '/delayed-entry',  icon: '⏱', label: 'Delayed Entry' },
-  { to: '/cost-savings',   icon: '₹', label: 'Cost Savings' },
+  { to: '/delayed-entry',  icon: '⏱', label: 'Invoice Insights' },
   { to: '/invoices',       icon: '🗂', label: 'Invoice Log' },
   { to: '/upload',         icon: '↑', label: 'Upload CSV' },
   { to: '/admin',          icon: '⚙', label: 'Admin' },
@@ -24,12 +23,13 @@ export default function AppShell() {
   const [quarters, setQuarters] = useState([])
 
   useEffect(() => {
-    // Fetch available quarters from both tables
+    // Fetch available quarters from the three primary source tables.
     Promise.all([
+      supabase.from('ap_voucher_add').select('quarter').not('quarter','is',null).limit(1000),
       supabase.from('ap_voucher_modify').select('quarter').not('quarter','is',null).limit(1000),
-      supabase.from('ap_invoice_tat').select('quarter').not('quarter','is',null).limit(1000),
-    ]).then(([mod, tat]) => {
-      const all = [...(mod.data || []), ...(tat.data || [])].map(r => r.quarter).filter(Boolean)
+      supabase.from('ap_invoice_data').select('quarter').not('quarter','is',null).limit(1000),
+    ]).then(([add, mod, inv]) => {
+      const all = [...(add.data || []), ...(mod.data || []), ...(inv.data || [])].map(r => r.quarter).filter(Boolean)
       const unique = [...new Set(all)].sort()
       setQuarters(unique)
     })

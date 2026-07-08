@@ -2,151 +2,177 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChart } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
-import { KpiCard, Card, NoteBox, Tag, Spinner, EmptyState } from '../components/UI'
+import { KpiCard, Card, Tag, Spinner, EmptyState } from '../components/UI'
 
-const shortPO = s => (s||'').replace('E-FOB (Paid for fabric in start of PO)','E-FOB').replace('PRODUCTION ORDER (FOB)','FOB').replace('JOB ORDER (CMTP Charge)','CMTP').replace('Fabrication (PO - PO settlement of fabric Invoice)','Fab Settle')
-const shortA  = s => (s||'').replace(' Partner','').replace('Fabric (Greige / Dyed) Supply','Fabric Supply')
+const shortPO = s => (s || '')
+  .replace('E-FOB (Paid for fabric in start of PO)', 'E-FOB')
+  .replace('PRODUCTION ORDER (FOB)', 'FOB')
+  .replace('JOB ORDER (Fabrication)', 'Fabrication')
+  .replace('JOB ORDER (CMTP Charge)', 'CMTP')
+  .replace('Fabrication (PO - PO settlement of fabric Invoice)', 'Fab Settle')
+
+const shortAssociation = s => (s || '')
+  .replace(' Partner', '')
+  .replace('Fabric (Greige / Dyed) Supply', 'Fabric Supply')
+
+function monthSort(a, b) {
+  return new Date('01 ' + a) - new Date('01 ' + b)
+}
+
+function uniqueBy(rows, keyFn) {
+  const seen = new Set()
+  return rows.filter(r => {
+    const key = keyFn(r)
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
 
 export default function DelayedEntry() {
   const { qtr } = useQtr()
-  const [tat, setTat] = useState([])
+  const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const refPerson  = useRef(null)
   const refMonthly = useRef(null)
-  const refPO      = useRef(null)
-  const refAssoc   = useRef(null)
+  const refPO = useRef(null)
+  const refAssoc = useRef(null)
+  const refDoc = useRef(null)
 
   useEffect(() => { fetchAll() }, [])
 
   async function fetchAll() {
     setLoading(true)
-    const { data } = await supabase.from('ap_invoice_tat').select('*').order('submitted_at')
-    setTat(data ?? [])
+    const { data } = await supabase
+      .from('ap_invoice_data')
+      .select('submitted_at, month_label, quarter, email, association, po_no, vendor_code, po_type, doc_type, invoice_no, invoice_date')
+      .order('submitted_at')
+    setInvoices(uniqueBy(data ?? [], r => `${r.invoice_no}|${r.vendor_code}|${r.submitted_at}`))
     setLoading(false)
   }
 
-  const filtered = qtr === 'all' ? tat : tat.filter(r => r.quarter === qtr)
+  const filtered = qtr === 'all' ? invoices : invoices.filter(r => r.quarter === qtr)
 
-  const byPerson = {}
-  filtered.forEach(r => {
-    if (!r.added_by) return
-    if (!byPerson[r.added_by]) byPerson[r.added_by] = { total:0, delay:0, ontime:0, tatVals:[] }
-    byPerson[r.added_by].total++
-    if (r.remark==='Delay') { byPerson[r.added_by].delay++; if(r.tat) byPerson[r.added_by].tatVals.push(r.tat) }
-    else byPerson[r.added_by].ontime++
-  })
-  const pNames = Object.keys(byPerson).sort((a,b)=>byPerson[b].total-byPerson[a].total)
-
-  // Monthly (always use full tat but filtered by qtr)
   const byMonth = {}
   filtered.forEach(r => {
     if (!r.month_label) return
-    if (!byMonth[r.month_label]) byMonth[r.month_label]={total:0,delay:0}
-    byMonth[r.month_label].total++
-    if (r.remark==='Delay') byMonth[r.month_label].delay++
+    byMonth[r.month_label] = (byMonth[r.month_label] || 0) + 1
   })
-  const mKeys = Object.keys(byMonth).sort((a,b)=>new Date('01 '+a)-new Date('01 '+b))
+  const months = Object.keys(byMonth).sort(monthSort)
 
   const byPO = {}
-  filtered.forEach(r => { const k=shortPO(r.po_type)||'Unknown'; if(!byPO[k]) byPO[k]={on:0,d:0}; r.remark==='Delay'?byPO[k].d++:byPO[k].on++ })
+  filtered.forEach(r => {
+    const k = shortPO(r.po_type) || 'Unknown'
+    byPO[k] = (byPO[k] || 0) + 1
+  })
 
   const byAssoc = {}
-  filtered.forEach(r => { const k=shortA(r.association)||'Unknown'; if(!byAssoc[k]) byAssoc[k]={on:0,d:0}; r.remark==='Delay'?byAssoc[k].d++:byAssoc[k].on++ })
+  filtered.forEach(r => {
+    const k = shortAssociation(r.association) || 'Unknown'
+    byAssoc[k] = (byAssoc[k] || 0) + 1
+  })
 
-  const totalDelay  = filtered.filter(r=>r.remark==='Delay').length
-  const totalOntime = filtered.filter(r=>r.remark==='On Time').length
-  const topDelayer  = [...pNames].sort((a,b)=>(byPerson[b].delay/byPerson[b].total)-(byPerson[a].delay/byPerson[a].total))[0]
-  const best        = [...pNames].filter(n=>byPerson[n].total>=5).sort((a,b)=>(byPerson[a].delay/byPerson[a].total)-(byPerson[b].delay/byPerson[b].total))[0]
+  const byDoc = {}
+  filtered.forEach(r => {
+    const k = r.doc_type || 'Unknown'
+    byDoc[k] = (byDoc[k] || 0) + 1
+  })
 
-  useChart(refPerson, pNames.length > 0 ? {
-    type:'bar', labels:pNames,
-    datasets:[
-      { label:'On Time', data:pNames.map(n=>byPerson[n].ontime), backgroundColor:'rgba(54,200,122,0.2)', borderColor:'#36c87a', borderWidth:1, borderRadius:6 },
-      { label:'Delayed', data:pNames.map(n=>byPerson[n].delay),  backgroundColor:'rgba(240,84,94,0.2)',  borderColor:'#f0545e', borderWidth:1, borderRadius:6 },
-    ], options:{legend:true}
-  } : null, [filtered.length, qtr])
+  const byVendor = {}
+  filtered.forEach(r => {
+    const k = r.vendor_code || 'Unknown'
+    byVendor[k] = (byVendor[k] || 0) + 1
+  })
+  const vendorRows = Object.entries(byVendor).sort((a, b) => b[1] - a[1]).slice(0, 15)
 
-  useChart(refMonthly, mKeys.length > 0 ? {
-    type:'line', labels:mKeys,
-    datasets:[{ label:'Delay %', data:mKeys.map(m=>(byMonth[m].delay/byMonth[m].total*100).toFixed(1)),
-      borderColor:'#f0545e', backgroundColor:'rgba(240,84,94,0.06)', fill:true, tension:0.4,
-      pointBackgroundColor:mKeys.map(m=>byMonth[m].delay/byMonth[m].total>0.1?'#f0545e':'#36c87a'), pointRadius:5, pointBorderWidth:0
-    }], options:{pct:true, legend:true}
+  const topPO = Object.entries(byPO).sort((a, b) => b[1] - a[1])[0]
+  const topAssoc = Object.entries(byAssoc).sort((a, b) => b[1] - a[1])[0]
+  const vendors = new Set(filtered.map(r => r.vendor_code).filter(Boolean))
+  const missingVendor = filtered.filter(r => !r.vendor_code).length
+
+  useChart(refMonthly, months.length > 0 ? {
+    type: 'line',
+    labels: months,
+    datasets: [{
+      label: 'Invoices',
+      data: months.map(m => byMonth[m]),
+      borderColor: '#4b7cf3',
+      backgroundColor: 'rgba(75,124,243,0.08)',
+      fill: true,
+      tension: 0.35,
+      pointRadius: 4,
+    }],
+    options: { legend: true }
   } : null, [filtered.length, qtr])
 
   useChart(refPO, Object.keys(byPO).length > 0 ? {
-    type:'bar', labels:Object.keys(byPO),
-    datasets:[
-      { label:'On Time', data:Object.values(byPO).map(v=>v.on), backgroundColor:'rgba(54,200,122,0.2)', borderColor:'#36c87a', borderWidth:1, borderRadius:6 },
-      { label:'Delayed', data:Object.values(byPO).map(v=>v.d),  backgroundColor:'rgba(240,84,94,0.2)',  borderColor:'#f0545e', borderWidth:1, borderRadius:6 },
-    ], options:{legend:true}
+    type: 'bar',
+    labels: Object.keys(byPO),
+    datasets: [{ data: Object.values(byPO), backgroundColor: 'rgba(54,200,122,0.2)', borderColor: '#36c87a', borderWidth: 1, borderRadius: 6 }]
   } : null, [filtered.length, qtr])
 
   useChart(refAssoc, Object.keys(byAssoc).length > 0 ? {
-    type:'bar', labels:Object.keys(byAssoc),
-    datasets:[
-      { label:'On Time', data:Object.values(byAssoc).map(v=>v.on), backgroundColor:'rgba(54,200,122,0.2)', borderColor:'#36c87a', borderWidth:1, borderRadius:6 },
-      { label:'Delayed', data:Object.values(byAssoc).map(v=>v.d),  backgroundColor:'rgba(240,84,94,0.2)',  borderColor:'#f0545e', borderWidth:1, borderRadius:6 },
-    ], options:{legend:true}
+    type: 'bar',
+    labels: Object.keys(byAssoc),
+    datasets: [{ data: Object.values(byAssoc), backgroundColor: 'rgba(20,184,166,0.18)', borderColor: '#0f9888', borderWidth: 1, borderRadius: 6 }]
   } : null, [filtered.length, qtr])
 
-  if (loading) return <div style={{padding:60,textAlign:'center'}}><Spinner /></div>
-  if (!tat.length) return <EmptyState icon="⏱" title="No TAT data" sub="Upload the AP Invoice TAT Working CSV to see delay analysis." />
+  useChart(refDoc, Object.keys(byDoc).length > 0 ? {
+    type: 'doughnut',
+    labels: Object.keys(byDoc),
+    datasets: [{ data: Object.values(byDoc), backgroundColor: ['rgba(75,124,243,0.2)', 'rgba(240,84,94,0.2)', 'rgba(245,158,11,0.2)', 'rgba(159,122,234,0.2)'], borderColor: ['#4b7cf3', '#f0545e', '#b7791f', '#9f7aea'], borderWidth: 2 }],
+    options: { legend: true, extra: { cutout: '68%' } }
+  } : null, [filtered.length, qtr])
 
-  const qtrLabel = qtr === 'all' ? 'All Quarters' : qtr.replace(/(\d{4})Q(\d)/,'Q$2 $1')
+  if (loading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
+  if (!invoices.length) return <EmptyState icon="[]" title="No invoice data" sub="Upload the Invoice Data CSV to see invoice submission insights." />
+
+  const qtrLabel = qtr === 'all' ? 'All Quarters' : qtr.replace(/(\d{4})Q(\d)/, 'Q$2 $1')
 
   return (
     <>
       <div className="page-header">
-        <div className="page-title">Delayed Entry</div>
-        <div className="page-sub">Invoice TAT analysis · {qtrLabel}</div>
+        <div className="page-title">Invoice Insights</div>
+        <div className="page-sub">Invoice submission mix by month, PO type, vendor, and association - {qtrLabel}</div>
       </div>
 
-      <NoteBox>TAT data available from the date tracking started. Only Invoice rows carry delay flags.</NoteBox>
-
       <div className="kpi-row mb">
-        <KpiCard label="Highest Delay Rate" value={topDelayer?`${(byPerson[topDelayer].delay/byPerson[topDelayer].total*100).toFixed(1)}%`:'—'} sub={topDelayer?`${topDelayer}`:'no data'} color="red" />
-        <KpiCard label="Best Performer"  value={best?`${(byPerson[best].delay/byPerson[best].total*100).toFixed(1)}%`:'—'} sub={best||'no data'} color="green" />
-        <KpiCard label="Total Delayed"   value={totalDelay}  sub={`${filtered.length>0?(totalDelay/filtered.length*100).toFixed(1):0}% of invoices`} color="amber" />
-        <KpiCard label="Total On Time"   value={totalOntime} sub={`${filtered.length>0?(totalOntime/filtered.length*100).toFixed(1):0}%`} color="blue" />
+        <KpiCard label="Invoices Submitted" value={filtered.length.toLocaleString()} sub={qtrLabel} color="blue" />
+        <KpiCard label="Active Vendors" value={vendors.size.toLocaleString()} sub="with vendor code" color="teal" />
+        <KpiCard label="Top PO Type" value={topPO?.[1]?.toLocaleString() || '0'} sub={topPO?.[0] || 'no data'} color="green" />
+        <KpiCard label="Missing Vendor Code" value={missingVendor.toLocaleString()} sub={`${filtered.length ? (missingVendor / filtered.length * 100).toFixed(1) : 0}% of invoices`} color={missingVendor ? 'amber' : 'green'} />
       </div>
 
       <div className="grid-65 mb">
-        <Card title="On-Time vs Delayed by Person">
-          <div className="chart-wrap" style={{height:230}}><canvas ref={refPerson}/></div>
+        <Card title="Monthly Invoice Submissions">
+          <div className="chart-wrap" style={{ height: 230 }}><canvas ref={refMonthly} /></div>
         </Card>
-        <Card title="Monthly Delay Rate">
-          <div className="chart-wrap" style={{height:230}}><canvas ref={refMonthly}/></div>
+        <Card title="Document Mix">
+          <div className="chart-wrap" style={{ height: 230 }}><canvas ref={refDoc} /></div>
         </Card>
       </div>
 
       <div className="grid-2 mb">
-        <Card title="Delay by PO Type">
-          <div className="chart-wrap" style={{height:190}}><canvas ref={refPO}/></div>
+        <Card title="Invoices by PO Type">
+          <div className="chart-wrap" style={{ height: 200 }}><canvas ref={refPO} /></div>
         </Card>
-        <Card title="Delay by Vendor Association">
-          <div className="chart-wrap" style={{height:190}}><canvas ref={refAssoc}/></div>
+        <Card title="Invoices by Association" titleRight={topAssoc?.[0]}>
+          <div className="chart-wrap" style={{ height: 200 }}><canvas ref={refAssoc} /></div>
         </Card>
       </div>
 
-      <Card title="Person Summary">
+      <Card title="Top Vendors by Invoice Count">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Person</th><th>Total</th><th>On Time</th><th>Delayed</th><th>Delay Rate</th><th>Avg TAT (delayed)</th><th>Status</th></tr></thead>
+            <thead><tr><th>Vendor Code</th><th>Invoices</th><th>Share</th><th>Status</th></tr></thead>
             <tbody>
-              {pNames.map(n => {
-                const d = byPerson[n]
-                const rate = (d.delay/d.total*100).toFixed(1)
-                const avg  = d.tatVals.length > 0 ? (d.tatVals.reduce((a,b)=>a+b,0)/d.tatVals.length).toFixed(1)+' days' : '—'
-                return <tr key={n}>
-                  <td><strong>{n}</strong></td>
-                  <td className="mono">{d.total}</td>
-                  <td className="mono" style={{color:'var(--green)'}}>{d.ontime}</td>
-                  <td className="mono" style={{color:'var(--red)'}}>{d.delay}</td>
-                  <td><Tag color={rate>30?'red':rate>10?'amber':'green'}>{rate}%</Tag></td>
-                  <td className="mono">{avg}</td>
-                  <td><Tag color={rate>30?'red':rate>10?'amber':'green'}>{rate>30?'Critical':rate>10?'Review':'Good'}</Tag></td>
+              {vendorRows.map(([vendor, count]) => {
+                const share = filtered.length ? (count / filtered.length * 100).toFixed(1) : '0.0'
+                return <tr key={vendor}>
+                  <td><strong>{vendor}</strong></td>
+                  <td className="mono">{count.toLocaleString()}</td>
+                  <td><Tag color={share > 20 ? 'amber' : 'blue'}>{share}%</Tag></td>
+                  <td><Tag color={vendor === 'Unknown' ? 'red' : 'green'}>{vendor === 'Unknown' ? 'Missing Code' : 'Mapped'}</Tag></td>
                 </tr>
               })}
             </tbody>

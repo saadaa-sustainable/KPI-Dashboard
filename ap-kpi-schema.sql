@@ -134,6 +134,8 @@ create table if not exists ap_invoice_data (
   submitted_at  timestamptz,
   month_label   text,
   quarter       text,
+  email         text,
+  association   text,
   invoice_no    text,
   vendor_code   text,
   po_no         text,
@@ -141,7 +143,6 @@ create table if not exists ap_invoice_data (
   doc_type      text,
   invoice_date  date,
   amount        numeric,
-  email         text,
   row_hash      text,
   created_at    timestamptz default now(),
   updated_at    timestamptz default now(),
@@ -359,6 +360,7 @@ create policy "admin can manage roles" on ap_user_roles
 -- MIGRATION: run on existing databases to add missing constraints
 -- ============================================================
 -- alter table ap_user_roles add constraint ap_user_roles_email_unique unique (email);
+-- alter table ap_invoice_data add column if not exists association text;
 -- create or replace function get_user_id_by_email(email_input text)
 -- returns table(id uuid) language sql security definer stable as $$
 --   select id from auth.users where email = email_input limit 1;
