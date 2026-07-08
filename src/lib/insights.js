@@ -8,6 +8,22 @@ export function normalizeVoucherKey(value) {
   return raw.toUpperCase()
 }
 
+export function voucherKeyCandidates(value) {
+  const raw = String(value ?? '').trim()
+  const primary = normalizeVoucherKey(raw)
+  if (!primary) return []
+
+  const candidates = [primary]
+  const parts = raw.split('/').map(p => p.trim()).filter(Boolean)
+  const last = parts[parts.length - 1]
+  if (last && /^\d+(\.0+)?$/.test(last)) {
+    const suffix = normalizeVoucherKey(last)
+    if (suffix && !candidates.includes(suffix)) candidates.push(suffix)
+  }
+
+  return candidates
+}
+
 export function uniqueBy(rows, keyFn) {
   const seen = new Set()
   return rows.filter(r => {
@@ -32,7 +48,8 @@ export function fiscalQuarterLabel(value) {
   if (isNaN(d)) return null
   const month = d.getMonth()
   const quarter = month < 3 ? 4 : month < 6 ? 1 : month < 9 ? 2 : 3
-  return `${d.getFullYear()}Q${quarter}`
+  const fiscalYear = month < 3 ? d.getFullYear() : d.getFullYear() + 1
+  return `${fiscalYear}Q${quarter}`
 }
 
 export function rowFiscalQuarter(row) {
@@ -59,6 +76,30 @@ export function daysBetween(start, end) {
   return Math.round((b - a) / 86400000)
 }
 
+function addCandidate(map, key, row) {
+  if (!key) return
+  const rows = map.get(key) || []
+  rows.push(row)
+  map.set(key, rows)
+}
+
+function bestVoucherMatch(candidates, map, submittedAt = null) {
+  for (const key of candidates) {
+    const rows = map.get(key) || []
+    if (rows.length === 0) continue
+    if (!submittedAt || rows.length === 1) return rows[0]
+
+    return [...rows].sort((a, b) => {
+      const aDays = daysBetween(submittedAt, a.entry_date || a.modified_at)
+      const bDays = daysBetween(submittedAt, b.entry_date || b.modified_at)
+      const aScore = aDays === null ? Number.MAX_SAFE_INTEGER : aDays >= 0 ? aDays : Math.abs(aDays) + 100000
+      const bScore = bDays === null ? Number.MAX_SAFE_INTEGER : bDays >= 0 ? bDays : Math.abs(bDays) + 100000
+      return aScore - bScore
+    })[0]
+  }
+  return null
+}
+
 export function buildVoucherSummary(addRows, modifyRows) {
   const addUnique = uniqueBy(addRows, r => normalizeVoucherKey(r.vch_no))
   const modifyByVoucher = new Map()
@@ -68,17 +109,16 @@ export function buildVoucherSummary(addRows, modifyRows) {
   }))
 
   modifyUnique.forEach(r => {
-    const key = normalizeVoucherKey(r.vch_no)
-    if (!key) return
-    modifyByVoucher.set(key, {
+    const match = {
       modified_at: r.modified_at,
       modified_by: r.modified_by || 'Not Modify',
-    })
+    }
+    voucherKeyCandidates(r.vch_no).forEach(key => addCandidate(modifyByVoucher, key, match))
   })
 
   const rows = addUnique.map(r => {
     const key = normalizeVoucherKey(r.vch_no)
-    const mod = modifyByVoucher.get(key)
+    const mod = bestVoucherMatch(voucherKeyCandidates(r.vch_no), modifyByVoucher)
     return {
       vch_no: r.vch_no,
       key,
@@ -98,17 +138,31 @@ export function buildVoucherSummary(addRows, modifyRows) {
 }
 
 export function buildInvoiceTatRows(invoiceRows, addRows, modifyRows) {
-  const { rows: vouchers, modifyByVoucher } = buildVoucherSummary(addRows, modifyRows)
+  const { modifyByVoucher } = buildVoucherSummary(addRows, modifyRows)
   const addByVoucher = new Map()
+  const addMatches = uniqueBy(
+    addRows,
+    r => `${normalizeVoucherKey(r.vch_no)}|${r.entry_date || ''}|${r.added_by || ''}`
+  ).map(r => ({
+    vch_no: r.vch_no,
+    key: normalizeVoucherKey(r.vch_no),
+    added_by: r.added_by || 'Unknown',
+    entry_date: r.entry_date,
+    quarter: rowFiscalQuarter(r),
+    month_label: r.month_label,
+    series: r.series,
+    type: r.type,
+  }))
 
-  vouchers.forEach(r => {
-    if (r.key) addByVoucher.set(r.key, r)
+  addMatches.forEach(r => {
+    voucherKeyCandidates(r.vch_no).forEach(key => addCandidate(addByVoucher, key, r))
   })
 
   return invoiceRows.map(inv => {
-    const key = normalizeVoucherKey(inv.invoice_no)
-    const add = addByVoucher.get(key)
-    const mod = modifyByVoucher.get(key)
+    const candidates = voucherKeyCandidates(inv.invoice_no)
+    const key = candidates[0] || ''
+    const add = bestVoucherMatch(candidates, addByVoucher, inv.submitted_at)
+    const mod = bestVoucherMatch(candidates, modifyByVoucher, inv.submitted_at)
     const tat = add?.entry_date ? daysBetween(inv.submitted_at, add.entry_date) : null
     const remark = tat === null ? null : tat > TAT_DELAY_DAYS ? 'Delay' : 'On Time'
 
