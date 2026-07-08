@@ -39,7 +39,12 @@ export function monthSort(a, b) {
 }
 
 export function qtrText(qtr) {
-  return qtr === 'all' ? 'All Quarters' : qtr.replace(/(\d{4})Q(\d)/, 'Q$2 $1')
+  if (qtr === 'all') return 'All Quarters'
+  const match = String(qtr).match(/^(\d{4})Q([1-4])$/)
+  if (!match) return String(qtr)
+  const fyEnd = Number(match[1])
+  const q = match[2]
+  return `FY${String(fyEnd - 1).slice(-2)}-${String(fyEnd).slice(-2)} Q${q}`
 }
 
 export function fiscalQuarterLabel(value) {

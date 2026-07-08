@@ -161,7 +161,7 @@ export default function ErrorRate() {
               {tableRows.map((r, i) => (
                 <tr key={i}>
                   <td><strong>{r.name}</strong></td>
-                  <td className="mono">{r.qtr.replace(/(\d{4})Q(\d)/, 'Q$2 $1')}</td>
+                  <td className="mono">{qtrText(r.qtr)}</td>
                   <td className="mono">{r.added.toLocaleString()}</td>
                   <td className="mono">{r.modified.toLocaleString()}</td>
                   <td><Tag color={rateColor(Number(r.rate))}>{r.rate}%</Tag></td>

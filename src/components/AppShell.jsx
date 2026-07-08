@@ -3,7 +3,7 @@ import { useAuth } from '../hooks/useAuth'
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchAllRows } from '../lib/db'
-import { rowFiscalQuarter } from '../lib/insights'
+import { qtrText, rowFiscalQuarter } from '../lib/insights'
 
 // ── Quarter context — shared across all pages ──────────────────────────────
 const EMPTY_DATA = { add: [], mod: [], inv: [] }
@@ -85,7 +85,7 @@ export default function AppShell() {
                 <button className={`qtr-btn ${qtr === 'all' ? 'active' : ''}`} onClick={() => setQtr('all')}>All</button>
                 {quarters.map(q => (
                   <button key={q} className={`qtr-btn ${qtr === q ? 'active' : ''}`} onClick={() => setQtr(q)}>
-                    {q.replace(/(\d{4})Q(\d)/, (_, yr, qn) => `Q${qn}'${yr.slice(-2)}`)}
+                    {qtrText(q)}
                   </button>
                 ))}
               </div>

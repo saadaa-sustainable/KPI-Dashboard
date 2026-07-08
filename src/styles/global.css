@@ -79,7 +79,8 @@ html, body, #root {
 .qtr-selector  {
   display: flex; align-items: center; gap: 1px;
   background: var(--surface2); border: 1px solid var(--border);
-  border-radius: var(--r-sm); padding: 2px; overflow: hidden;
+  border-radius: var(--r-sm); padding: 2px; overflow-x: auto; overflow-y: hidden;
+  max-width: min(760px, 55vw);
 }
 .qtr-btn {
   padding: 4px 10px; font-size: 10px; font-weight: 600;
@@ -87,6 +88,7 @@ html, body, #root {
   background: transparent; color: var(--muted);
   transition: all 0.15s; letter-spacing: 0.03em;
   font-family: 'JetBrains Mono', monospace;
+  white-space: nowrap;
 }
 .qtr-btn:hover  { color: var(--text); background: var(--surface3); }
 .qtr-btn.active { background: var(--accent); color: #fff; }
