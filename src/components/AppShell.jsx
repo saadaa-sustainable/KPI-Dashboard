@@ -10,7 +10,7 @@ export function useQtr() { return useContext(QtrContext) }
 const NAV = [
   { to: '/',               icon: '▦', label: 'Overview' },
   { to: '/error-rate',     icon: '✎', label: 'Error Rate' },
-  { to: '/delayed-entry',  icon: '⏱', label: 'Invoice Insights' },
+  { to: '/delayed-entry',  icon: '⏱', label: 'Invoice TAT' },
   { to: '/invoices',       icon: '🗂', label: 'Invoice Log' },
   { to: '/upload',         icon: '↑', label: 'Upload CSV' },
   { to: '/admin',          icon: '⚙', label: 'Admin' },

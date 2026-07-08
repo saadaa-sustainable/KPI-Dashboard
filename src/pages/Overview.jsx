@@ -3,24 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { KpiCard, Card, EmptyState, Spinner } from '../components/UI'
-
-function qtrText(qtr) {
-  return qtr === 'all' ? 'All Quarters' : qtr.replace(/(\d{4})Q(\d)/, 'Q$2 $1')
-}
-
-function monthSort(a, b) {
-  return new Date('01 ' + a) - new Date('01 ' + b)
-}
-
-function uniqueBy(rows, keyFn) {
-  const seen = new Set()
-  return rows.filter(r => {
-    const key = keyFn(r)
-    if (!key || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
+import { buildInvoiceTatRows, buildVoucherSummary, monthSort, qtrText, rateColor } from '../lib/insights'
 
 export default function Overview() {
   const { qtr } = useQtr()
@@ -39,24 +22,29 @@ export default function Overview() {
   async function fetchAll() {
     setLoading(true)
     const [a, m, i] = await Promise.all([
-      supabase.from('ap_voucher_add').select('vch_no, added_by, quarter, month_label, series, type'),
-      supabase.from('ap_voucher_modify').select('vch_no, modified_by, quarter, month_label, series, type'),
-      supabase.from('ap_invoice_data').select('invoice_no, vendor_code, po_type, doc_type, quarter, month_label, association'),
+      supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type'),
+      supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type'),
+      supabase.from('ap_invoice_data').select('invoice_no, vendor_code, po_type, doc_type, submitted_at, quarter, month_label, association'),
     ])
 
-    setAdd(uniqueBy(a.data ?? [], r => r.vch_no))
-    setMod(uniqueBy(m.data ?? [], r => r.vch_no))
-    setInv(uniqueBy(i.data ?? [], r => `${r.invoice_no}|${r.vendor_code}`))
+    setAdd(a.data ?? [])
+    setMod(m.data ?? [])
+    setInv(i.data ?? [])
     setLoading(false)
   }
 
-  const filtAdd = qtr === 'all' ? add : add.filter(r => r.quarter === qtr)
-  const filtMod = qtr === 'all' ? mod : mod.filter(r => r.quarter === qtr)
+  const voucherSummary = buildVoucherSummary(add, mod)
+  const summaryRows = qtr === 'all' ? voucherSummary.rows : voucherSummary.rows.filter(r => r.quarter === qtr)
+  const filtAdd = summaryRows
+  const filtMod = summaryRows.filter(r => r.is_modified)
   const filtInv = qtr === 'all' ? inv : inv.filter(r => r.quarter === qtr)
+  const tatRows = buildInvoiceTatRows(inv, add, mod)
+  const filtTat = qtr === 'all' ? tatRows : tatRows.filter(r => r.quarter === qtr)
+  const matchedTat = filtTat.filter(r => r.remark)
+  const delayed = matchedTat.filter(r => r.remark === 'Delay').length
+  const delayRate = matchedTat.length ? (delayed / matchedTat.length * 100).toFixed(2) : '0.00'
 
-  const modVouchers = new Set(filtMod.map(r => r.vch_no).filter(Boolean))
-  const addedVouchers = new Set(filtAdd.map(r => r.vch_no).filter(Boolean))
-  const modificationRate = addedVouchers.size > 0 ? (modVouchers.size / addedVouchers.size * 100).toFixed(1) : '0.0'
+  const modificationRate = filtAdd.length > 0 ? (filtMod.length / filtAdd.length * 100).toFixed(2) : '0.00'
   const vendors = new Set(filtInv.map(r => r.vendor_code).filter(Boolean))
 
   useChart(refAddMod, (filtAdd.length || filtMod.length) ? (() => {
@@ -100,7 +88,7 @@ export default function Overview() {
 
   useChart(refPerson, filtMod.length ? (() => {
     const byP = {}
-    filtMod.forEach(r => { byP[r.modified_by || 'Unknown'] = (byP[r.modified_by || 'Unknown'] || 0) + 1 })
+    filtMod.forEach(r => { byP[r.modify_by || 'Unknown'] = (byP[r.modify_by || 'Unknown'] || 0) + 1 })
     const names = Object.keys(byP).sort((a, b) => byP[b] - byP[a])
     return { type: 'bar', labels: names, datasets: [{ data: names.map(n => byP[n]), backgroundColor: names.map(n => pc(n) + '44'), borderColor: names.map(n => pc(n)), borderWidth: 1, borderRadius: 6 }] }
   })() : null, [filtMod.length, qtr])
@@ -119,7 +107,7 @@ export default function Overview() {
         <KpiCard label="Invoices Submitted" value={filtInv.length.toLocaleString()} sub={`${vendors.size.toLocaleString()} vendors`} color="blue" />
         <KpiCard label="Vouchers Added" value={filtAdd.length.toLocaleString()} sub="unique Busy vouchers" color="green" />
         <KpiCard label="Vouchers Modified" value={filtMod.length.toLocaleString()} sub="unique Busy vouchers" color="amber" />
-        <KpiCard label="Modification Rate" value={`${modificationRate}%`} sub="modified / added vouchers" color={Number(modificationRate) > 30 ? 'red' : 'teal'} />
+        <KpiCard label="Delay Rate" value={`${delayRate}%`} sub={`${delayed.toLocaleString()} of ${matchedTat.length.toLocaleString()} matched invoices`} color={rateColor(Number(delayRate))} />
       </div>
 
       <div className="grid-65 mb">
@@ -135,7 +123,7 @@ export default function Overview() {
         <Card title="Invoices by PO Type">
           <div className="chart-wrap" style={{ height: 200 }}><canvas ref={refPO} /></div>
         </Card>
-        <Card title="Modifications by Person">
+        <Card title={`% Of Modify: ${modificationRate}%`}>
           <div className="chart-wrap" style={{ height: 200 }}><canvas ref={refPerson} /></div>
         </Card>
       </div>

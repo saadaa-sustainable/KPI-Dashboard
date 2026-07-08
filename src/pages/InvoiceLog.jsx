@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useQtr } from '../components/AppShell'
-import { Card, Tag, Spinner, EmptyState } from '../components/UI'
+import { Card, Tag, Spinner, EmptyState, StatusTag } from '../components/UI'
+import { buildInvoiceTatRows } from '../lib/insights'
 
 const PAGE = 100
 const shortPO = s => (s || '')
@@ -19,6 +20,18 @@ export default function InvoiceLog() {
   const [docType, setDocType] = useState('all')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [addRows, setAddRows] = useState([])
+  const [modifyRows, setModifyRows] = useState([])
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by'),
+      supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by'),
+    ]).then(([add, mod]) => {
+      setAddRows(add.data ?? [])
+      setModifyRows(mod.data ?? [])
+    })
+  }, [])
 
   const fetchRows = useCallback(async () => {
     setLoading(true)
@@ -47,6 +60,7 @@ export default function InvoiceLog() {
   ]
   const totalPages = Math.ceil(total / PAGE)
   const qtrLabel = qtr === 'all' ? 'All Quarters' : qtr.replace(/(\d{4})Q(\d)/, 'Q$2 $1')
+  const displayRows = buildInvoiceTatRows(rows, addRows, modifyRows)
 
   return (
     <>
@@ -72,19 +86,20 @@ export default function InvoiceLog() {
           : <>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Submitted</th><th>Invoice No</th><th>Vendor</th><th>PO No</th><th>PO Type</th><th>Document</th><th>Association</th><th>Quarter</th><th>Email</th></tr></thead>
+                <thead><tr><th>Submitted</th><th>Invoice No</th><th>Vendor</th><th>PO No</th><th>Add In Busy</th><th>If Modify</th><th>TAT</th><th>Add BY</th><th>Modify By</th><th>Remark</th></tr></thead>
                 <tbody>
-                  {rows.map((r, i) => (
+                  {displayRows.map((r, i) => (
                     <tr key={i}>
                       <td className="mono" style={{ whiteSpace: 'nowrap' }}>{r.submitted_at ? new Date(r.submitted_at).toLocaleDateString('en-IN') : '-'}</td>
                       <td className="mono">{r.invoice_no || '-'}</td>
                       <td><Tag color={r.vendor_code ? 'teal' : 'red'}>{r.vendor_code || 'Missing'}</Tag></td>
                       <td className="mono">{r.po_no || '-'}</td>
-                      <td style={{ color: 'var(--muted)', fontSize: 10 }}>{shortPO(r.po_type) || '-'}</td>
-                      <td><Tag color={r.doc_type === 'CREDIT NOTE' ? 'amber' : r.doc_type === 'DEBIT NOTE' ? 'purple' : 'blue'}>{r.doc_type || '-'}</Tag></td>
-                      <td style={{ color: 'var(--muted)', fontSize: 10 }}>{r.association || '-'}</td>
-                      <td className="mono" style={{ color: 'var(--muted)' }}>{r.quarter || '-'}</td>
-                      <td style={{ fontSize: 10, color: 'var(--muted)' }}>{r.email || '-'}</td>
+                      <td className="mono" style={{ whiteSpace: 'nowrap' }}>{r.add_in_busy ? new Date(r.add_in_busy).toLocaleDateString('en-IN') : '-'}</td>
+                      <td className="mono" style={{ whiteSpace: 'nowrap' }}>{r.if_modify ? new Date(r.if_modify).toLocaleDateString('en-IN') : 'Not Modify'}</td>
+                      <td className="mono" style={{ color: r.tat > 5 ? 'var(--red)' : 'var(--green)' }}>{r.tat ?? '-'}</td>
+                      <td><strong>{r.added_by || '-'}</strong></td>
+                      <td>{r.modify_by || 'Not Modify'}</td>
+                      <td><StatusTag value={r.remark} /></td>
                     </tr>
                   ))}
                 </tbody>

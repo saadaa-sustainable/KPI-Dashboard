@@ -3,22 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { Card, InfoBox, NoteBox, ProgressBar, Tag, Spinner, EmptyState } from '../components/UI'
-
-function uniqueBy(rows, keyFn) {
-  const seen = new Set()
-  return rows.filter(r => {
-    const key = keyFn(r)
-    if (!key || seen.has(key)) return false
-    seen.add(key)
-    return true
-  })
-}
-
-function rateColor(rate) {
-  if (rate > 30) return 'red'
-  if (rate > 10) return 'amber'
-  return 'green'
-}
+import { buildVoucherSummary, qtrText, rateColor } from '../lib/insights'
 
 export default function ErrorRate() {
   const { qtr } = useQtr()
@@ -33,24 +18,24 @@ export default function ErrorRate() {
   async function fetchAll() {
     setLoading(true)
     const [addRes, modRes] = await Promise.all([
-      supabase.from('ap_voucher_add').select('vch_no, added_by, quarter, month_label, series, type'),
-      supabase.from('ap_voucher_modify').select('vch_no, modified_by, quarter, month_label, series, type'),
+      supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type'),
+      supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type'),
     ])
-    setAddData(uniqueBy(addRes.data ?? [], r => r.vch_no))
-    setModData(uniqueBy(modRes.data ?? [], r => r.vch_no))
+    setAddData(addRes.data ?? [])
+    setModData(modRes.data ?? [])
     setLoading(false)
   }
 
-  const filteredAdd = qtr === 'all' ? addData : addData.filter(r => r.quarter === qtr)
-  const filteredMod = qtr === 'all' ? modData : modData.filter(r => r.quarter === qtr)
+  const voucherSummary = buildVoucherSummary(addData, modData)
+  const summaryRows = qtr === 'all' ? voucherSummary.rows : voucherSummary.rows.filter(r => r.quarter === qtr)
+  const filteredMod = qtr === 'all' ? voucherSummary.modifyUnique : voucherSummary.modifyUnique.filter(r => r.quarter === qtr)
 
-  const modifiedVoucherSet = new Set(filteredMod.map(r => r.vch_no).filter(Boolean))
   const byPerson = {}
-  filteredAdd.forEach(r => {
+  summaryRows.forEach(r => {
     const name = r.added_by || 'Unknown'
     if (!byPerson[name]) byPerson[name] = { added: 0, modified: 0 }
     byPerson[name].added++
-    if (modifiedVoucherSet.has(r.vch_no)) byPerson[name].modified++
+    if (r.is_modified) byPerson[name].modified++
   })
 
   const names = Object.keys(byPerson).sort((a, b) => {
@@ -70,14 +55,13 @@ export default function ErrorRate() {
   const displayQtrs = qtr === 'all' ? quarters : [qtr]
   const tableRows = []
   displayQtrs.forEach(q => {
-    const qAdd = addData.filter(r => r.quarter === q)
-    const qModSet = new Set(modData.filter(r => r.quarter === q).map(r => r.vch_no).filter(Boolean))
+    const qRows = voucherSummary.rows.filter(r => r.quarter === q)
     const qByPerson = {}
-    qAdd.forEach(r => {
+    qRows.forEach(r => {
       const name = r.added_by || 'Unknown'
       if (!qByPerson[name]) qByPerson[name] = { added: 0, modified: 0 }
       qByPerson[name].added++
-      if (qModSet.has(r.vch_no)) qByPerson[name].modified++
+      if (r.is_modified) qByPerson[name].modified++
     })
     Object.entries(qByPerson).forEach(([name, d]) => {
       const rate = d.added > 0 ? d.modified / d.added * 100 : 0
@@ -97,7 +81,7 @@ export default function ErrorRate() {
       borderRadius: 6,
     }],
     options: { pct: true, legend: true }
-  } : null, [filteredAdd.length, filteredMod.length, qtr])
+  } : null, [summaryRows.length, filteredMod.length, qtr])
 
   useChart(refSeries, topSeries.length > 0 ? {
     type: 'bar',
@@ -108,10 +92,10 @@ export default function ErrorRate() {
   if (loading) return <div style={{ padding: 60, textAlign: 'center' }}><Spinner /></div>
   if (!addData.length && !modData.length) return <EmptyState icon="!" title="No voucher data" sub="Upload Add and Modify CSVs to see error rate analysis." />
 
-  const totalAdded = filteredAdd.length
-  const totalModified = modifiedVoucherSet.size
+  const totalAdded = summaryRows.length
+  const totalModified = summaryRows.filter(r => r.is_modified).length
   const totalRate = totalAdded > 0 ? (totalModified / totalAdded * 100).toFixed(1) : '0.0'
-  const qtrLabel = qtr === 'all' ? 'All Quarters' : qtr.replace(/(\d{4})Q(\d)/, 'Q$2 $1')
+  const qtrLabel = qtrText(qtr)
 
   return (
     <>
@@ -122,7 +106,7 @@ export default function ErrorRate() {
 
       {!addData.length
         ? <NoteBox>Add CSV not uploaded yet - showing modification volume only.</NoteBox>
-        : <InfoBox>Error rate = unique added vouchers that were later modified / unique vouchers added.</InfoBox>
+        : <InfoBox>Matches the OG Entry Summary pivot: Count of Modify By / Count of Vch No, grouped by Add By.</InfoBox>
       }
 
       <div className="kpi-row mb">
