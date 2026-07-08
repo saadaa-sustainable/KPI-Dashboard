@@ -2,6 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllRows } from '../lib/db'
 import { rowFiscalQuarter } from '../lib/insights'
 
 // ── Quarter context — shared across all pages ──────────────────────────────
@@ -26,11 +27,11 @@ export default function AppShell() {
   useEffect(() => {
     // Fetch available quarters from the three primary source tables.
     Promise.all([
-      supabase.from('ap_voucher_add').select('entry_date, quarter').limit(1000),
-      supabase.from('ap_voucher_modify').select('modified_at, quarter').limit(1000),
-      supabase.from('ap_invoice_data').select('submitted_at, quarter').limit(1000),
+      fetchAllRows(() => supabase.from('ap_voucher_add').select('entry_date, quarter')),
+      fetchAllRows(() => supabase.from('ap_voucher_modify').select('modified_at, quarter')),
+      fetchAllRows(() => supabase.from('ap_invoice_data').select('submitted_at, quarter').not('submitted_at', 'is', null)),
     ]).then(([add, mod, inv]) => {
-      const all = [...(add.data || []), ...(mod.data || []), ...(inv.data || [])].map(rowFiscalQuarter).filter(Boolean)
+      const all = [...add, ...mod, ...inv].map(rowFiscalQuarter).filter(Boolean)
       const unique = [...new Set(all)].sort()
       setQuarters(unique)
     })

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllRows } from '../lib/db'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { Card, InfoBox, NoteBox, ProgressBar, Tag, Spinner, EmptyState, HelpButton } from '../components/UI'
@@ -40,11 +41,11 @@ export default function ErrorRate() {
   async function fetchAll() {
     setLoading(true)
     const [addRes, modRes] = await Promise.all([
-      supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type'),
-      supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type'),
+      fetchAllRows(() => supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type')),
+      fetchAllRows(() => supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type')),
     ])
-    setAddData(addRes.data ?? [])
-    setModData(modRes.data ?? [])
+    setAddData(addRes)
+    setModData(modRes)
     setLoading(false)
   }
 

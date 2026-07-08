@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllRows } from '../lib/db'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { KpiCard, Card, Tag, Spinner, EmptyState, InfoBox, HelpButton } from '../components/UI'
@@ -52,13 +53,13 @@ export default function DelayedEntry() {
   async function fetchAll() {
     setLoading(true)
     const [inv, add, mod] = await Promise.all([
-      supabase.from('ap_invoice_data').select('submitted_at, month_label, quarter, email, po_no, vendor_code, po_type, doc_type, invoice_no, invoice_date'),
-      supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type'),
-      supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type'),
+      fetchAllRows(() => supabase.from('ap_invoice_data').select('submitted_at, month_label, quarter, email, po_no, vendor_code, po_type, doc_type, invoice_no, invoice_date').not('submitted_at', 'is', null)),
+      fetchAllRows(() => supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type')),
+      fetchAllRows(() => supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type')),
     ])
-    setInvoiceRows(inv.data ?? [])
-    setAddRows(add.data ?? [])
-    setModifyRows(mod.data ?? [])
+    setInvoiceRows(inv)
+    setAddRows(add)
+    setModifyRows(mod)
     setLoading(false)
   }
 

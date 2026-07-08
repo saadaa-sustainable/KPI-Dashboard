@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllRows } from '../lib/db'
 import { useQtr } from '../components/AppShell'
 import { Card, Tag, Spinner, EmptyState, StatusTag, HelpButton } from '../components/UI'
 import { buildInvoiceTatRows, rowFiscalQuarter } from '../lib/insights'
@@ -47,11 +48,11 @@ export default function InvoiceLog() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by'),
-      supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by'),
+      fetchAllRows(() => supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by')),
+      fetchAllRows(() => supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by')),
     ]).then(([add, mod]) => {
-      setAddRows(add.data ?? [])
-      setModifyRows(mod.data ?? [])
+      setAddRows(add)
+      setModifyRows(mod)
     })
   }, [])
 
@@ -59,6 +60,7 @@ export default function InvoiceLog() {
     setLoading(true)
     let q = supabase.from('ap_invoice_data').select('*', { count: 'exact' })
       .order('submitted_at', { ascending: false })
+      .not('submitted_at', 'is', null)
 
     if (docType !== 'all') q = q.eq('doc_type', docType)
     if (search.trim()) q = q.or(`invoice_no.ilike.%${search}%,vendor_code.ilike.%${search}%,po_no.ilike.%${search}%,email.ilike.%${search}%`)

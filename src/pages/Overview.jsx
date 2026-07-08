@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchAllRows } from '../lib/db'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
 import { KpiCard, Card, EmptyState, Spinner, HelpButton, Tag } from '../components/UI'
@@ -44,14 +45,14 @@ export default function Overview() {
   async function fetchAll() {
     setLoading(true)
     const [a, m, i] = await Promise.all([
-      supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type'),
-      supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type'),
-      supabase.from('ap_invoice_data').select('invoice_no, vendor_code, po_type, doc_type, submitted_at, quarter, month_label'),
+      fetchAllRows(() => supabase.from('ap_voucher_add').select('vch_no, entry_date, added_by, quarter, month_label, series, type')),
+      fetchAllRows(() => supabase.from('ap_voucher_modify').select('vch_no, modified_at, modified_by, quarter, month_label, series, type')),
+      fetchAllRows(() => supabase.from('ap_invoice_data').select('invoice_no, vendor_code, po_type, doc_type, submitted_at, quarter, month_label').not('submitted_at', 'is', null)),
     ])
 
-    setAdd(a.data ?? [])
-    setMod(m.data ?? [])
-    setInv(i.data ?? [])
+    setAdd(a)
+    setMod(m)
+    setInv(i)
     setLoading(false)
   }
 
