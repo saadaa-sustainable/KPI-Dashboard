@@ -2,8 +2,33 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
-import { KpiCard, Card, Tag, Spinner, EmptyState, InfoBox } from '../components/UI'
+import { KpiCard, Card, Tag, Spinner, EmptyState, InfoBox, HelpButton } from '../components/UI'
 import { buildInvoiceTatRows, monthSort, qtrText, rateColor, TAT_DELAY_DAYS } from '../lib/insights'
+
+const HELP = {
+  title: 'Invoice TAT',
+  terms: [
+    { term: 'Timestamp', meaning: 'Invoice submission date from the Invoice Data CSV.' },
+    { term: 'Add In Busy', meaning: 'Busy entry date found by matching Invoice Number to Vch No in the Add CSV.' },
+    { term: 'If Modify', meaning: 'Modify date found by matching Invoice Number to Vch No in the Modify CSV.' },
+    { term: 'TAT', meaning: 'Number of days between invoice submission and Busy entry.' },
+    { term: 'Remark', meaning: 'On Time or Delay status based on the TAT threshold.' },
+    { term: 'Unmatched Invoices', meaning: 'Invoice rows whose invoice number could not be found in the Add CSV.' },
+  ],
+  formulas: [
+    { name: 'Add In Busy', formula: 'XLOOKUP(Invoice Number, Add!F:F, Add!B:B)' },
+    { name: 'If Modify', formula: 'XLOOKUP(Invoice Number, Modify!F:F, Modify!B:B)' },
+    { name: 'TAT', formula: 'Add In Busy date - Timestamp date' },
+    { name: 'Remark', formula: 'Delay if TAT > 5 days; otherwise On Time' },
+    { name: '% On Time', formula: 'On Time count / Grand Total * 100' },
+    { name: '% Delay', formula: 'Delay count / Grand Total * 100' },
+    { name: 'Avg TAT', formula: 'sum(TAT days) / matched invoice count' },
+  ],
+  notes: [
+    'This recreates the OG AP INVOICE TAT Working tab from the three CSV inputs.',
+    'Rows without a matching Add voucher are excluded from TAT rate calculations and shown as unmatched.',
+  ],
+}
 
 function avg(values) {
   const clean = values.filter(v => typeof v === 'number' && !isNaN(v))
@@ -125,7 +150,10 @@ export default function DelayedEntry() {
   return (
     <>
       <div className="page-header">
-        <div className="page-title">Invoice TAT</div>
+        <div className="page-title-row">
+          <div className="page-title">Invoice TAT</div>
+          <HelpButton {...HELP} />
+        </div>
         <div className="page-sub">Recreated from Invoice Data + Add + Modify CSVs - {qtrLabel}</div>
       </div>
 

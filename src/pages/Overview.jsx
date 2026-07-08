@@ -2,8 +2,25 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
-import { KpiCard, Card, EmptyState, Spinner } from '../components/UI'
+import { KpiCard, Card, EmptyState, Spinner, HelpButton } from '../components/UI'
 import { buildInvoiceTatRows, buildVoucherSummary, monthSort, qtrText, rateColor } from '../lib/insights'
+
+const HELP = {
+  title: 'Overview',
+  terms: [
+    { term: 'Invoices Submitted', meaning: 'Count of invoice submission rows from the Invoice Data CSV for the selected quarter.' },
+    { term: 'Vouchers Added', meaning: 'Unique Busy voucher numbers from the Add CSV.' },
+    { term: 'Vouchers Modified', meaning: 'Unique added vouchers that have a matching voucher number in the Modify CSV.' },
+    { term: 'Delay Rate', meaning: 'Share of matched invoices where Busy entry happened after the allowed TAT window.' },
+    { term: '% Of Modify', meaning: 'Same metric as the OG Entry Summary pivot: Count of Modify By divided by Count of Vch No.' },
+  ],
+  formulas: [
+    { name: 'Voucher Summary', formula: 'Vch No = UNIQUE(Add!F:F); Add By = XLOOKUP(Vch No, Add!F:F, Add!N:N); Modify By = XLOOKUP(Vch No, Add!F:F, Add!P:P)' },
+    { name: '% Of Modify', formula: 'modified unique vouchers / added unique vouchers * 100' },
+    { name: 'TAT', formula: 'Add In Busy date - Invoice Timestamp date' },
+    { name: 'Delay Rate', formula: 'Delay invoices / matched invoices * 100, where Delay means TAT > 5 days' },
+  ],
+}
 
 export default function Overview() {
   const { qtr } = useQtr()
@@ -99,7 +116,10 @@ export default function Overview() {
   return (
     <>
       <div className="page-header">
-        <div className="page-title">Overview</div>
+        <div className="page-title-row">
+          <div className="page-title">Overview</div>
+          <HelpButton {...HELP} />
+        </div>
         <div className="page-sub">AP activity from Add, Modify, and Invoice Data CSVs - {qtrText(qtr)}</div>
       </div>
 

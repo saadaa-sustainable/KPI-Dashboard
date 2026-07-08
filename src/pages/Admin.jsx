@@ -1,7 +1,27 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { Card, Tag, Spinner } from '../components/UI'
+import { Card, Tag, Spinner, HelpButton } from '../components/UI'
 import { useAuth } from '../hooks/useAuth'
+
+const HELP = {
+  title: 'Admin',
+  terms: [
+    { term: 'Viewer', meaning: 'Role intended for read-only users.' },
+    { term: 'Uploader', meaning: 'Role allowed by Supabase RLS to insert and update uploaded CSV data.' },
+    { term: 'Admin', meaning: 'Role allowed by Supabase RLS to manage user roles.' },
+    { term: 'RLS', meaning: 'Row Level Security. Supabase policies enforce what users can read or write.' },
+    { term: 'Pre-provisioned user', meaning: 'A role row can be created for an email before that person has logged in.' },
+  ],
+  formulas: [
+    { name: 'Role lookup', formula: 'get_my_role() returns role from ap_user_roles, defaulting to viewer' },
+    { name: 'SAADAA access check', formula: 'is_saadaa_user() allows authenticated emails ending with @saadaa.in' },
+    { name: 'Grant role', formula: 'upsert role by email; attach user_id when auth.users contains that email' },
+  ],
+  notes: [
+    'Client route guards are intentionally permissive; Supabase RLS is the real permission boundary.',
+    'Removing a user deletes the dashboard role row, not the Supabase Auth user.',
+  ],
+}
 
 export default function Admin() {
   const { isAdmin } = useAuth()
@@ -63,8 +83,13 @@ export default function Admin() {
 
   return (
     <>
-      <div className="page-title">Admin</div>
-      <div className="page-sub">Manage who can access and upload data to this dashboard</div>
+      <div className="page-header">
+        <div className="page-title-row">
+          <div className="page-title">Admin</div>
+          <HelpButton {...HELP} />
+        </div>
+        <div className="page-sub">Manage who can access and upload data to this dashboard</div>
+      </div>
 
       <Card title="Grant Access" className="mb">
         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>

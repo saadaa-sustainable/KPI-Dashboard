@@ -2,10 +2,32 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChart } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
-import { KpiCard, Card, NoteBox, Tag, Spinner, EmptyState } from '../components/UI'
+import { KpiCard, Card, NoteBox, Tag, Spinner, EmptyState, HelpButton } from '../components/UI'
 
 const fmt = n => n!=null ? `₹${Number(n).toLocaleString('en-IN',{maximumFractionDigits:0})}` : '—'
 const pct  = n => n!=null ? `${Number(n).toFixed(2)}%` : '—'
+
+const HELP = {
+  title: 'Cost Savings',
+  terms: [
+    { term: 'Invoice Value', meaning: 'Base invoice amount used for savings percentage calculation.' },
+    { term: 'Savings', meaning: 'Recovered or saved amount, typically from debit notes or credit notes.' },
+    { term: 'Credit Notes', meaning: 'Credit note amount issued or recovered for the selected category.' },
+    { term: 'AP', meaning: 'Accounts Payable savings categories such as debit note recoveries.' },
+    { term: 'AR', meaning: 'Accounts Receivable deductions, usually logistics or customer-side recoveries.' },
+  ],
+  formulas: [
+    { name: 'Total Invoice Value', formula: 'sum(invoice_amt)' },
+    { name: 'Total Savings', formula: 'sum(saving_amt)' },
+    { name: 'Total Credit Notes', formula: 'sum(credit_note_amt)' },
+    { name: 'Overall Saving %', formula: 'total savings / total invoice value * 100' },
+    { name: 'Monthly Saving %', formula: 'monthly saving amount / monthly invoice amount * 100' },
+  ],
+  notes: [
+    'This tab depends on the Cost Saved table, which is separate from the three primary CSVs.',
+    'The OG workbook had some manual purchase/invoice inputs for this tab, so this page only reflects rows present in ap_cost_saved.',
+  ],
+}
 
 export default function CostSavings() {
   const { qtr } = useQtr()
@@ -77,7 +99,10 @@ export default function CostSavings() {
   return (
     <>
       <div className="page-header">
-        <div className="page-title">Cost Savings</div>
+        <div className="page-title-row">
+          <div className="page-title">Cost Savings</div>
+          <HelpButton {...HELP} />
+        </div>
         <div className="page-sub">AP debit note recoveries and AR logistics deductions</div>
       </div>
 

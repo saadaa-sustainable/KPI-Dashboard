@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
 import { useQtr } from '../components/AppShell'
-import { Card, Tag, Spinner, EmptyState, StatusTag } from '../components/UI'
+import { Card, Tag, Spinner, EmptyState, StatusTag, HelpButton } from '../components/UI'
 import { buildInvoiceTatRows } from '../lib/insights'
 
 const PAGE = 100
@@ -11,6 +11,28 @@ const shortPO = s => (s || '')
   .replace('JOB ORDER (Fabrication)', 'Fabrication')
   .replace('JOB ORDER (CMTP Charge)', 'CMTP')
   .replace('Fabrication (PO - PO settlement of fabric Invoice)', 'Fab Settle')
+
+const HELP = {
+  title: 'Invoice Log',
+  terms: [
+    { term: 'Submitted', meaning: 'Invoice form submission date from Invoice Data.' },
+    { term: 'Vendor', meaning: 'Vendor Code from the invoice submission.' },
+    { term: 'Add In Busy', meaning: 'Date the invoice number was found in the Add CSV.' },
+    { term: 'If Modify', meaning: 'Date the same invoice or voucher number was found in the Modify CSV.' },
+    { term: 'TAT', meaning: 'Days between Submitted and Add In Busy.' },
+    { term: 'Remark', meaning: 'On Time or Delay based on the TAT rule.' },
+  ],
+  formulas: [
+    { name: 'Add In Busy', formula: 'XLOOKUP(Invoice Number, Add!F:F, Add!B:B)' },
+    { name: 'If Modify', formula: 'XLOOKUP(Invoice Number, Modify!F:F, Modify!B:B)' },
+    { name: 'TAT', formula: 'Add In Busy date - Submitted date' },
+    { name: 'Remark', formula: 'Delay if TAT > 5 days; otherwise On Time' },
+  ],
+  notes: [
+    'The table is paginated server-side, 100 invoice rows at a time.',
+    'Search checks invoice number, vendor code, PO number, and email.',
+  ],
+}
 
 export default function InvoiceLog() {
   const { qtr } = useQtr()
@@ -65,7 +87,10 @@ export default function InvoiceLog() {
   return (
     <>
       <div className="page-header">
-        <div className="page-title">Invoice Log</div>
+        <div className="page-title-row">
+          <div className="page-title">Invoice Log</div>
+          <HelpButton {...HELP} />
+        </div>
         <div className="page-sub">{total.toLocaleString()} records - {qtrLabel}</div>
       </div>
 

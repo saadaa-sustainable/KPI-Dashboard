@@ -1,12 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadCSV } from '../lib/upload'
-import { Card, NoteBox, Tag, Spinner } from '../components/UI'
+import { Card, NoteBox, Tag, Spinner, HelpButton } from '../components/UI'
 
 const FILE_CONFIGS = {
   add: { icon: '+', label: 'Add Log', hint: 'KPI Dashboard - Add.csv', table: 'ap_voucher_add' },
   modify: { icon: '*', label: 'Modify Log', hint: 'KPI Dashboard - Modify.csv', table: 'ap_voucher_modify' },
   invoice_data: { icon: '#', label: 'Invoice Data', hint: 'KPI Dashboard - Invoice Data.csv', table: 'ap_invoice_data' },
+}
+
+const HELP = {
+  title: 'Upload CSV Data',
+  terms: [
+    { term: 'Add Log', meaning: 'Busy export containing voucher creation events. It feeds voucher counts, Add By, and Add In Busy date.' },
+    { term: 'Modify Log', meaning: 'Busy export containing voucher modification events. It feeds Modify By and If Modify date.' },
+    { term: 'Invoice Data', meaning: 'Vendor invoice form export. It feeds invoice number, timestamp, vendor, PO type, and document type.' },
+    { term: 'Upsert', meaning: 'Insert new rows and update existing rows when the configured conflict key already exists.' },
+    { term: 'Upload History', meaning: 'Audit log of file uploads, row counts, status, and errors.' },
+  ],
+  formulas: [
+    { name: 'Add conflict key', formula: 'vch_no + account + entry_date' },
+    { name: 'Modify conflict key', formula: 'vch_no + account + modified_at + modified_by' },
+    { name: 'Invoice Data conflict key', formula: 'invoice_no + vendor_code + submitted_at' },
+    { name: 'Quarter', formula: 'year(submitted/entry date) + Q + calendar quarter number' },
+    { name: 'Month Label', formula: 'MMM YYYY from submitted/entry date' },
+  ],
+  notes: [
+    'Invoice Data files may contain a preamble row; ingestion scans for the real header row.',
+    'Busy dates are parsed as day-first dates to avoid month/day swaps.',
+  ],
 }
 
 function UploadZone({ fileType, onUpload }) {
@@ -117,8 +139,13 @@ export default function Upload() {
 
   return (
     <>
-      <div className="page-title">Upload CSV Data</div>
-      <div className="page-sub">Upload the 3 primary source files. Files are auto-detected - duplicates are skipped, changed rows are updated.</div>
+      <div className="page-header">
+        <div className="page-title-row">
+          <div className="page-title">Upload CSV Data</div>
+          <HelpButton {...HELP} />
+        </div>
+        <div className="page-sub">Upload the 3 primary source files. Files are auto-detected - duplicates are skipped, changed rows are updated.</div>
+      </div>
 
       <NoteBox>
         Upload Add, Modify, and Invoice Data CSVs one file at a time. Large Add/Modify files can take several minutes - keep the tab open.

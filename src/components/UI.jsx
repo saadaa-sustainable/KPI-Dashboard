@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+
 export function KpiCard({ label, value, sub, color = 'blue' }) {
   return (
     <div className={`kpi ${color}`}>
@@ -21,6 +23,81 @@ export function Card({ title, children, titleRight, style }) {
       )}
       {children}
     </div>
+  )
+}
+
+export function HelpButton({ title, terms = [], formulas = [], notes = [] }) {
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    const onKey = e => { if (e.key === 'Escape') setOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open])
+
+  return (
+    <>
+      <button
+        type="button"
+        className="info-btn"
+        aria-label={`Show ${title} definitions and formulas`}
+        title="Definitions and formulas"
+        onClick={() => setOpen(true)}
+      >
+        i
+      </button>
+      {open && (
+        <div className="help-overlay" role="presentation" onMouseDown={() => setOpen(false)}>
+          <div className="help-modal" role="dialog" aria-modal="true" aria-label={`${title} definitions and formulas`} onMouseDown={e => e.stopPropagation()}>
+            <div className="help-head">
+              <div>
+                <div className="help-kicker">Definitions and formulas</div>
+                <div className="help-title">{title}</div>
+              </div>
+              <button type="button" className="help-close" aria-label="Close" onClick={() => setOpen(false)}>x</button>
+            </div>
+
+            {terms.length > 0 && (
+              <div className="help-section">
+                <div className="help-section-title">Terms</div>
+                <dl className="help-list">
+                  {terms.map(item => (
+                    <div key={item.term} className="help-item">
+                      <dt>{item.term}</dt>
+                      <dd>{item.meaning}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+
+            {formulas.length > 0 && (
+              <div className="help-section">
+                <div className="help-section-title">Formulas</div>
+                <dl className="help-list">
+                  {formulas.map(item => (
+                    <div key={item.name} className="help-item">
+                      <dt>{item.name}</dt>
+                      <dd><code>{item.formula}</code></dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+
+            {notes.length > 0 && (
+              <div className="help-section">
+                <div className="help-section-title">Notes</div>
+                <ul className="help-notes">
+                  {notes.map(note => <li key={note}>{note}</li>)}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

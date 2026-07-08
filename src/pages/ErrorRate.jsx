@@ -2,8 +2,30 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useChart, pc } from '../hooks/useChart'
 import { useQtr } from '../components/AppShell'
-import { Card, InfoBox, NoteBox, ProgressBar, Tag, Spinner, EmptyState } from '../components/UI'
+import { Card, InfoBox, NoteBox, ProgressBar, Tag, Spinner, EmptyState, HelpButton } from '../components/UI'
 import { buildVoucherSummary, qtrText, rateColor } from '../lib/insights'
+
+const HELP = {
+  title: 'Error Rate',
+  terms: [
+    { term: 'Add By', meaning: 'The person in the Name column of the Add CSV for the unique voucher.' },
+    { term: 'Added', meaning: 'Count of unique voucher numbers created in Busy by that person.' },
+    { term: 'Modified', meaning: 'Count of those added vouchers that later appear in the Modify CSV.' },
+    { term: 'Error Rate', meaning: 'The percentage of added vouchers that needed modification.' },
+    { term: 'Series', meaning: 'Busy voucher series, such as TRIMS, MAIN, MFG, or RM.' },
+  ],
+  formulas: [
+    { name: 'Unique Vouchers', formula: 'UNIQUE(Add!F:F)' },
+    { name: 'Add By Lookup', formula: 'XLOOKUP(Vch No, Add!F:F, Add!N:N)' },
+    { name: 'Modify By Lookup', formula: 'XLOOKUP(Vch No, Modify!F:F, Modify!N:N)' },
+    { name: 'Error Rate', formula: 'modified vouchers / added vouchers * 100' },
+    { name: 'Overall Error Rate', formula: 'total modified unique vouchers / total added unique vouchers * 100' },
+  ],
+  notes: [
+    'This matches the OG Entry Summary pivot: Count of Modify By divided by Count of Vch No, grouped by Add By.',
+    'Voucher matching is done by normalized voucher number so numeric-looking values like 9.0 and 9 match.',
+  ],
+}
 
 export default function ErrorRate() {
   const { qtr } = useQtr()
@@ -100,7 +122,10 @@ export default function ErrorRate() {
   return (
     <>
       <div className="page-header">
-        <div className="page-title">Error Rate</div>
+        <div className="page-title-row">
+          <div className="page-title">Error Rate</div>
+          <HelpButton {...HELP} />
+        </div>
         <div className="page-sub">Modified vouchers divided by added vouchers - {qtrLabel}</div>
       </div>
 
