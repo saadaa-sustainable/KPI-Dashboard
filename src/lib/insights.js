@@ -146,16 +146,17 @@ export function buildVoucherSummary(addRows, modifyRows) {
   }))
 
   modifyUnique.forEach(r => {
-    const match = {
+    const key = normalizeVoucherKey(r.vch_no)
+    if (!key) return
+    modifyByVoucher.set(key, {
       modified_at: r.modified_at,
       modified_by: r.modified_by || 'Not Modify',
-    }
-    voucherKeyCandidates(r.vch_no).forEach(key => addCandidate(modifyByVoucher, key, match))
+    })
   })
 
   const rows = addUnique.map(r => {
     const key = normalizeVoucherKey(r.vch_no)
-    const mod = bestVoucherMatch(voucherKeyCandidates(r.vch_no), modifyByVoucher)
+    const mod = modifyByVoucher.get(key)
     return {
       vch_no: r.vch_no,
       key,
@@ -174,8 +175,26 @@ export function buildVoucherSummary(addRows, modifyRows) {
   return { rows, addUnique, modifyUnique, modifyByVoucher }
 }
 
+function buildModifyMatchMap(modifyRows) {
+  const modifyByVoucher = new Map()
+  const modifyUnique = uniqueBy(
+    modifyRows,
+    r => `${normalizeVoucherKey(r.vch_no)}|${r.modified_at || ''}|${r.modified_by || ''}`
+  )
+
+  modifyUnique.forEach(r => {
+    const match = {
+      modified_at: r.modified_at,
+      modified_by: r.modified_by || 'Not Modify',
+    }
+    voucherKeyCandidates(r.vch_no).forEach(key => addCandidate(modifyByVoucher, key, match))
+  })
+
+  return modifyByVoucher
+}
+
 export function buildInvoiceTatRows(invoiceRows, addRows, modifyRows) {
-  const { modifyByVoucher } = buildVoucherSummary(addRows, modifyRows)
+  const modifyByVoucher = buildModifyMatchMap(modifyRows)
   const addByVoucher = new Map()
   const addMatches = uniqueBy(
     addRows,

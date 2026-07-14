@@ -15,12 +15,27 @@ const HELP = {
   formulas: [
     { name: 'Role lookup', formula: 'get_my_role() returns role from ap_user_roles, defaulting to viewer' },
     { name: 'SAADAA access check', formula: 'is_saadaa_user() allows authenticated emails ending with @saadaa.in' },
-    { name: 'Grant role', formula: 'upsert role by email; attach user_id when auth.users contains that email' },
+    { name: 'Grant role', formula: 'upsert role by email; user_id can remain empty until the user logs in' },
   ],
   notes: [
     'Client route guards are intentionally permissive; Supabase RLS is the real permission boundary.',
     'Removing a user deletes the dashboard role row, not the Supabase Auth user.',
   ],
+}
+
+async function runWithTimeout(query, ms = 12000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    return await query.abortSignal(controller.signal)
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      return { data: null, error: new Error('Request timed out. Please try again.') }
+    }
+    return { data: null, error }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export default function Admin() {
@@ -36,47 +51,76 @@ export default function Admin() {
 
   async function fetchUsers() {
     setLoading(true)
-    const { data } = await supabase.from('ap_user_roles').select('*').order('created_at')
+    const { data, error } = await runWithTimeout(
+      supabase.from('ap_user_roles').select('*').order('created_at')
+    )
+    if (error) {
+      setMsg({ type: 'error', text: error.message })
+      setLoading(false)
+      return
+    }
     setUsers(data ?? [])
     setLoading(false)
   }
 
   async function grantRole() {
-    if (!email.trim()) return
+    const cleanEmail = email.trim().toLowerCase()
+    if (!cleanEmail) return
+    if (!cleanEmail.endsWith('@saadaa.in')) {
+      setMsg({ type: 'error', text: 'Please enter a @saadaa.in email.' })
+      return
+    }
+
     setSaving(true)
     setMsg(null)
 
-    const { data: existing } = await supabase
+    const { data: saved, error } = await runWithTimeout(
+      supabase
       .from('ap_user_roles')
-      .select('id')
-      .eq('email', email.trim())
-      .maybeSingle()
+      .upsert({ email: cleanEmail, role }, { onConflict: 'email' })
+      .select('*')
+      .single()
+    )
 
-    let error
-    if (existing) {
-      ;({ error } = await supabase.from('ap_user_roles').update({ role }).eq('id', existing.id))
-    } else {
-      const { data: authUsers } = await supabase.rpc('get_user_id_by_email', { email_input: email.trim() }).catch(() => ({ data: null }))
-      ;({ error } = await supabase.from('ap_user_roles').insert({
-        email: email.trim(), role, user_id: authUsers?.[0]?.id ?? null,
-      }))
+    if (error) {
+      setMsg({ type: 'error', text: error.message })
+      setSaving(false)
+      return
     }
 
-    setMsg(error ? { type: 'error', text: error.message } : { type: 'success', text: `Role "${role}" granted to ${email}` })
+    setUsers(prev => {
+      const row = saved ?? { email: cleanEmail, role, created_at: new Date().toISOString() }
+      const exists = prev.some(u => u.email === cleanEmail)
+      return exists
+        ? prev.map(u => u.email === cleanEmail ? { ...u, ...row } : u)
+        : [row, ...prev]
+    })
+    setMsg({ type: 'success', text: `Role "${role}" granted to ${cleanEmail}` })
     setEmail('')
     setSaving(false)
-    fetchUsers()
   }
 
   async function changeRole(id, newRole) {
-    await supabase.from('ap_user_roles').update({ role: newRole }).eq('id', id)
-    fetchUsers()
+    const { error } = await runWithTimeout(
+      supabase.from('ap_user_roles').update({ role: newRole }).eq('id', id)
+    )
+    if (error) {
+      setMsg({ type: 'error', text: error.message })
+      return
+    }
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, role: newRole } : u))
   }
 
   async function removeUser(id) {
     if (!confirm('Remove this user\'s access?')) return
-    await supabase.from('ap_user_roles').delete().eq('id', id)
-    fetchUsers()
+    const { error } = await runWithTimeout(
+      supabase.from('ap_user_roles').delete().eq('id', id)
+    )
+    if (error) {
+      setMsg({ type: 'error', text: error.message })
+      return
+    }
+    setUsers(prev => prev.filter(u => u.id !== id))
   }
 
   if (!isAdmin) return <div style={{ padding: 40, color: 'var(--muted)', fontSize: 13 }}>Access restricted to admins.</div>

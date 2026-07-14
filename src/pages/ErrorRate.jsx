@@ -156,7 +156,7 @@ export default function ErrorRate() {
       <Card title="Person x Quarter Breakdown">
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Person</th><th>Quarter</th><th>Added</th><th>Modified</th><th>Error Rate</th><th>Status</th></tr></thead>
+            <thead><tr><th>Person</th><th>Quarter</th><th>Added</th><th>Modified</th><th>Error Rate</th></tr></thead>
             <tbody>
               {tableRows.map((r, i) => (
                 <tr key={i}>
@@ -165,7 +165,6 @@ export default function ErrorRate() {
                   <td className="mono">{r.added.toLocaleString()}</td>
                   <td className="mono">{r.modified.toLocaleString()}</td>
                   <td><Tag color={rateColor(Number(r.rate))}>{r.rate}%</Tag></td>
-                  <td><Tag color={rateColor(Number(r.rate))}>{Number(r.rate) > 30 ? 'Critical' : Number(r.rate) > 10 ? 'Review' : 'Good'}</Tag></td>
                 </tr>
               ))}
             </tbody>
